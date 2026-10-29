@@ -1,5 +1,6 @@
 /**
- * The client report as a single HTML file: the web twin of the PDF, built
+ * The client report as a single HTML file: the web twin of the PDF (summary
+ * dashboard, then problems, fixes and what's working well), built
  * from the same executive summary and in the same visual language (grey
  * canvas, white hairline cards, sentence-case table headers, grey chips,
  * status dots). Adapts to dark mode on screen and prints on A4.
@@ -43,10 +44,18 @@ p{margin:0}.muted{color:var(--text-2)}.faint{color:var(--text-3)}.small{font-siz
 .chip.flag{box-shadow:inset 0 0 0 1px var(--danger)}.sw{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-2);margin-right:14px}
 .sw i{width:16px;height:16px;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)}.swrow{margin-top:8px}
 ul{margin:4px 0 0;padding-left:18px;color:var(--text-2)}
-table{width:100%;border-collapse:collapse}th{font-weight:400;color:var(--text-3);font-size:11.5px;text-align:left;padding:8px;background:var(--canvas);border-bottom:1px solid var(--border)}
+table{width:100%;border-collapse:collapse}th{font-weight:400;color:var(--text-3);font-size:11.5px;text-align:left;padding:8px;white-space:nowrap;background:var(--canvas);border-bottom:1px solid var(--border)}
 td{padding:9px 8px;border-bottom:1px solid var(--border);vertical-align:top}tr:last-child td{border-bottom:0}.num{text-align:right;font-variant-numeric:tabular-nums}
 .tablecard{padding:0;overflow:hidden}.aa{display:inline-grid;place-items:center;width:30px;height:18px;border-radius:4px;font-weight:700;font-size:11px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)}
 footer{color:var(--text-3);font-size:11px;text-align:center;margin-top:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.bars{display:grid;grid-template-columns:auto 1fr auto;gap:8px 10px;align-items:center;margin-top:10px;font-size:12px}
+.track{height:7px;border-radius:4px;background:var(--sunken);overflow:hidden;position:relative}.track i{position:absolute;inset:0 auto 0 0;border-radius:4px;background:var(--text)}
+.track b{position:absolute;inset:0 auto 0 0;border-radius:4px;background:var(--border)}.val{color:var(--text-2);text-align:right;font-variant-numeric:tabular-nums}
+.part{font-size:12px;color:var(--text-2);margin-top:36px}.part+h2{font-size:22px;margin-top:2px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.stats div{background:var(--canvas);border-radius:8px;box-shadow:inset 0 0 0 1px var(--border);padding:8px 10px}
+.stats b{display:block;font-size:15px}.stats span{font-size:11px;color:var(--text-2)}
+@media (max-width:640px){.grid2,.grid3,.stats{grid-template-columns:1fr}}
 @media (max-width:640px){.grid4{grid-template-columns:repeat(2,1fr)}.cover{grid-template-columns:1fr}.shot{width:100%}}
 @media print{@page{size:A4;margin:14mm}body{font-size:11px}main{padding:0;max-width:none}.card{break-inside:avoid}.break{break-before:page}}
 `;
@@ -73,19 +82,26 @@ function evidenceHtml(e: Evidence): string {
   }
 }
 
-function findingHtml(p: PainPoint, index: number, money: (n: number) => string): string {
-  const meta = [p.pages.length ? `Seen on ${p.pages.slice(0, 4).join(', ')}` : '', p.annualCost ? `about ${money(p.annualCost)} a year` : '']
-    .filter(Boolean)
-    .join(' · ');
+function problemHtml(p: PainPoint, index: number, money: (n: number) => string): string {
   const priority = PRIORITY[p.severity];
-  return `<section class="card finding"><div class="body">
-<header><h3>${index}. ${escape(p.title)}</h3><span class="dot ${priority.dot}">${priority.label}</span></header>
-${meta ? `<p class="small muted">${escape(meta)}</p>` : ''}
-<p style="margin-top:8px">${escape(p.story)}</p>
+  const seen = p.where.length ? p.where.map((w) => w.charAt(0).toUpperCase() + w.slice(1)) : p.pages;
+  return `<section class="card"><header style="display:flex;justify-content:space-between;gap:12px"><h3>${index}. ${escape(p.title)}</h3><span class="dot ${priority.dot}">${priority.label}</span></header>
+<p class="muted">${escape(p.summary)}</p>
+<div class="stats"><div><b>${p.count.toLocaleString('en-US')}</b><span>${escape(p.countLabel)}</span></div>
+<div><b>${p.pages.length || '—'}</b><span>${p.pages.length === 1 ? 'page affected' : p.pages.length ? 'pages affected' : 'single page'}</span></div>
+<div><b>${p.annualCost ? money(p.annualCost) : '—'}</b><span>${p.annualCost ? 'estimated cost a year' : 'risk rather than cost'}</span></div></div>
 ${evidenceHtml(p.evidence)}
-${p.where.length ? `<p class="label">Where we saw it</p><ul>${p.where.map((w) => `<li>${escape(w.charAt(0).toUpperCase() + w.slice(1))}</li>`).join('')}</ul>` : ''}
-<p class="label">Why it matters</p><p class="muted">${escape(p.why)}</p></div>
-<div class="foot"><p class="label" style="margin-top:0">What we’d suggest</p><p>${escape(p.suggestion)}</p></div></section>`;
+${seen.length ? `<p class="label">Seen in</p><div class="chips">${seen.slice(0, 6).map((w) => `<span class="chip">${escape(w)}</span>`).join('')}</div>` : ''}
+<details style="margin-top:10px"><summary class="small muted">More detail</summary><p class="small muted" style="margin-top:6px">${escape(p.story)}</p></details>
+<p class="small muted" style="margin-top:8px">Why it matters: ${escape(p.why)}</p></section>`;
+}
+
+function bars(rows: { label: string; value: number; valueLabel: string; dot?: string }[], max: number): string {
+  return `<div class="bars">${rows
+    .map(
+      (r) => `<span>${r.dot ? `<span class="dot ${r.dot}"></span> ` : ''}${escape(r.label)}</span><span class="track"><i style="width:${Math.max(3, (Math.min(r.value, max) / max) * 100)}%"></i></span><span class="val">${escape(r.valueLabel)}</span>`,
+    )
+    .join('')}</div>`;
 }
 
 export function auditToHtml(audit: Audit, options: ClientReportOptions): string {
@@ -99,6 +115,11 @@ export function auditToHtml(audit: Audit, options: ClientReportOptions): string 
   const contact = [branding.preparedBy, branding.email, branding.website].filter(Boolean).map(escape).join(' · ');
   const agency = branding.agencyName ? escape(branding.agencyName) : '';
   const greeting = summary.clientName === 'your product' ? 'Hi there,' : `Hi ${escape(summary.clientName)} team,`;
+  const costRows = summary.painPoints
+    .filter((p) => p.annualCost)
+    .sort((x, y) => (y.annualCost ?? 0) - (x.annualCost ?? 0))
+    .slice(0, 7)
+    .map((p) => ({ label: p.affects, value: p.annualCost!, valueLabel: short(p.annualCost!) }));
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -118,33 +139,69 @@ ${summary.hook ? `<section class="card"><h3>Something you may not know</h3><p st
 
 <h2>${escape(summary.headline)}</h2><p class="muted">${escape(summary.subheadline)}</p>
 <section class="grid4">
-<div class="card tile"><b>${short(n.yearlyCost)}</b><span>Estimated yearly cost of inconsistency</span></div>
+<div class="card tile"><b>${short(n.yearlyCost)}</b><span>Yearly cost of inconsistency (estimate)</span></div>
 <div class="card tile"><b>${short(n.recoverable)}</b><span>Could be saved every year</span></div>
 <div class="card tile"><b>${n.hoursLost}h</b><span>Team hours lost each year</span></div>
 <div class="card tile"><b>${summary.score}/100</b><span>Consistency score (75+ is healthy)</span></div>
 </section>
+<section class="grid2">
+<div class="card"><h3>Where the cost comes from</h3><p class="small muted">Estimated yearly cost, by problem</p>
+${bars(costRows, Math.max(1, ...costRows.map((r) => r.value)))}</div>
+<div class="card"><h3>Health by area</h3><p class="small muted">Score out of 100, weakest first. 75 and above is healthy.</p>
+${bars([...summary.areas].sort((x, y) => x.score - y.score).map((ar) => ({ label: ar.label, value: ar.score, valueLabel: String(ar.score), dot: ar.status })), 100)}</div>
+</section>
 <p class="small muted">${escape(summary.scoreExplainer)}</p>
 
+<p class="part">Part 1</p><h2>The problems</h2><p class="muted">Where each problem lives, how many places it shows up and what it is likely costing your team. Most important first.</p>
+<section class="grid3">${summary.layers
+  .map((ly) => `<div class="card tile"><span>${escape(ly.layer)}</span><b>${ly.problems === 1 ? '1 problem' : `${ly.problems} problems`}</b><span>${ly.problems ? `${ly.places.toLocaleString('en-US')} places · ${ly.annualCost ? `${money(ly.annualCost)}/yr` : 'risk, not cost'}` : 'Nothing to fix'}</span></div>`)
+  .join('')}</section>
 ${
   summary.painPoints.length
-    ? `<h2 class="break">What we found</h2><p class="muted">The problems we noticed, most important first. For each one we show where it appears, why it matters and what we would do about it.</p>
-${summary.painPoints.map((p, i) => findingHtml(p, i + 1, money)).join('')}`
+    ? `<section class="card tablecard"><table><tr><th>#</th><th>Problem</th><th>Affects</th><th class="num">Places</th><th class="num">Cost a year</th><th>Priority</th></tr>${summary.painPoints
+        .map(
+          (p, i) => `<tr><td class="muted">${i + 1}</td><td><b>${escape(p.title)}</b></td><td class="muted">${escape(p.affects)}</td><td class="num">${p.count.toLocaleString('en-US')}</td>
+<td class="num">${p.annualCost ? money(p.annualCost) : '<span class="faint">—</span>'}</td><td><span class="dot ${PRIORITY[p.severity].dot}">${PRIORITY[p.severity].label}</span></td></tr>`,
+        )
+        .join('')}</table></section>
+${summary.painPoints.map((p, i) => problemHtml(p, i + 1, money)).join('')}`
+    : '<p class="muted">We didn’t find any problems worth reporting.</p>'
+}
+
+${
+  summary.fixes.length
+    ? `<p class="part break">Part 2</p><h2>The fixes</h2><p class="muted">What we would do about each problem, and what each fix is realistically worth: about ${money(summary.fixes.reduce((t, f) => t + (f.annualSaving ?? 0), 0))} a year together. Numbers match the problems in Part 1.</p>
+<section class="card tablecard"><table><tr><th>#</th><th>Fix</th><th class="num">Saves a year</th></tr>${summary.fixes
+        .map((f) => `<tr><td class="muted">${f.problem}</td><td><b>${escape(f.title)}</b><div class="small muted">${escape(f.detail)}</div></td><td class="num">${f.annualSaving ? `<b>${money(f.annualSaving)}</b>` : '<span class="faint">—</span>'}</td></tr>`)
+        .join('')}</table></section>
+${
+  summary.beforeAfter.length
+    ? `<section class="card"><h3>After the cleanup</h3><p class="small muted">Distinct styles to maintain, today versus after the fixes. <span class="sw"><i style="background:var(--text)"></i>after cleanup</span><span class="sw"><i style="background:var(--border)"></i>removed</span></p>
+<div class="bars">${summary.beforeAfter
+        .map((r) => {
+          const max = Math.max(...summary.beforeAfter.map((x) => x.today));
+          return `<span>${escape(r.label)}</span><span class="track" style="background:none"><b style="width:${(r.today / max) * 100}%"></b><i style="width:${Math.max(3, (r.after / max) * 100)}%"></i></span><span class="val">${r.today} → ${r.after}</span>`;
+        })
+        .join('')}</div></section>`
+    : ''
+}`
     : ''
 }
 
-<h2>Your design system at a glance</h2><p class="muted">A stock-take of the building blocks in your product that need attention, compared with what a tidy design system usually has. The biggest gaps are at the top.</p>
+<p class="part break">Part 3</p><h2>What’s working well</h2><p class="muted">Parts of your product that are already consistent. Worth protecting as the product grows.</p>
 ${
-  summary.metrics.length
-    ? `<section class="card tablecard"><table><tr><th>What we looked at</th><th>What we found</th><th>A tidy system has</th><th>Status</th><th class="num">Cost a year</th></tr>
-${summary.metrics
-  .map(
-    (m) => `<tr><td><b>${escape(m.label)}</b><div class="small muted">${escape(m.explainer)}</div></td><td><b>${escape(m.found)}</b>${m.foundNote ? `<div class="small muted">${escape(m.foundNote)}</div>` : ''}</td>
-<td class="muted">${escape(m.healthy)}</td><td><span class="dot ${m.status}">${STATUS_LABELS[m.status]}</span></td><td class="num">${m.annualCost ? money(m.annualCost) : '<span class="faint">—</span>'}</td></tr>`,
-  )
-  .join('')}</table></section>`
+  summary.strengths.length
+    ? `<section class="grid2">${summary.strengths.map((st) => `<div class="card"><h3><span class="dot strong"></span> ${escape(st.title)}</h3><p class="small muted" style="margin-top:4px">${escape(st.detail)}</p></div>`).join('')}</section>`
     : ''
 }
-${summary.healthyMetrics.length ? `<p class="muted small">Also checked and already in good shape: ${summary.healthyMetrics.map((m) => `${escape(m.label.toLowerCase())} (${escape(m.found)})`).join(', ')}.</p>` : ''}
+${
+  summary.healthyMetrics.length
+    ? `<section class="card tablecard"><table><tr><th>Building block</th><th>In use</th><th>Status</th></tr>${summary.healthyMetrics
+        .map((m) => `<tr><td><b>${escape(m.label)}</b></td><td class="muted">${escape(m.found)}</td><td><span class="dot strong">${STATUS_LABELS[m.status]}</span></td></tr>`)
+        .join('')}</table></section>`
+    : ''
+}
+${summary.strengths.length + summary.healthyMetrics.length === 0 ? '<p class="muted">Every area has room to improve, which also means every fix above pays off quickly.</p>' : ''}
 
 ${
   summary.pages.length > 1

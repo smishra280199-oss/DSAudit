@@ -21,12 +21,27 @@ export type Evidence =
   | { kind: 'variants'; items: { label: string; details: string }[] }
   | { kind: 'none' };
 
+/** Where in the product a problem lives, for the report's problem map. */
+export type ProblemLayer = 'Tokens & styles' | 'Components' | 'Elements';
+
+export const PROBLEM_LAYERS: ProblemLayer[] = ['Tokens & styles', 'Components', 'Elements'];
+
 export interface PainPoint {
   id: string;
   area: AreaKey;
   severity: Severity;
+  layer: ProblemLayer;
+  /** What it affects, in one or two words: "Colours", "Buttons", "Readability". */
+  affects: string;
+  /** How many places it shows up, and what is counted ("places", "hand-typed values"…). */
+  count: number;
+  countLabel: string;
   /** A plain statement of the problem, in their terms. */
   title: string;
+  /** The problem in one short sentence, for scanning. */
+  summary: string;
+  /** The fix as a short instruction: "Merge your purples into one colour token". */
+  fixTitle: string;
   /** What we saw, with their own examples. */
   story: string;
   /** Where it shows up: elements, and pages when several were audited. */
@@ -105,10 +120,17 @@ function colours({ audit, d, lineCost }: Context): PainPoint | null {
     story += ` ${plural(copies, 'of them is a near-identical copy', 'of them are near-identical copies')} of another colour. For example, your ${name} ${top.hex} also appears as ${listOf(top.members.slice(1, 3).map((m) => m.value))}. Side by side, nobody can tell them apart, but in code they are separate colours that each have to be chosen, checked and maintained.`;
   }
   if (palette.length > 20) story += ` Even after merging those, there are ${palette.length} distinct colours, more than most well-run products need.`;
+  const copyUses = drifted.reduce((n, c) => n + c.members.slice(1).reduce((m, v) => m + v.count, 0), 0);
 
   return {
     id: 'colours',
     area: 'color',
+    layer: 'Tokens & styles',
+    affects: 'Colours',
+    count: copyUses,
+    countLabel: copyUses === 1 ? 'place uses a near-copy' : 'places use a near-copy',
+    summary: `${plural(copies, 'colour is a near-identical copy', 'colours are near-identical copies')} of another, out of ${total} in use.`,
+    fixTitle: top ? `Merge your ${colourName(top.hex)}s into one named colour` : 'Merge near-identical colours into one palette',
     severity: copies >= 6 || palette.length > 30 ? 'high' : 'medium',
     title: top ? `Your ${colourName(top.hex)} exists in ${plural(top.members.length, 'slightly different shade')}` : `${total} colours where about 20 would do`,
     story,
@@ -143,9 +165,18 @@ function typeSizes({ audit, d, lineCost }: Context): PainPoint | null {
     story += ` ${plural(flagged.length, 'of them doesn’t', 'of them don’t')} fit the size steps the rest of the product follows.`;
   }
 
+  const flaggedUses = flagged.reduce((n, v) => n + v.count, 0);
   return {
     id: 'type-sizes',
     area: 'typography',
+    layer: 'Tokens & styles',
+    affects: 'Text sizes',
+    count: flaggedUses,
+    countLabel: flaggedUses === 1 ? 'piece of text off the scale' : 'pieces of text off the scale',
+    summary: example
+      ? `${group.values.length} text sizes, some only a pixel apart (${px(example.value)} and ${px(example.nearDuplicateOf!)}).`
+      : `${group.values.length} text sizes; ${flagged.length} don’t fit the scale.`,
+    fixTitle: `Settle on a ${needed}-step type scale`,
     severity: group.values.length > group.target * 1.5 || twins.length >= 3 ? 'high' : 'medium',
     title: `Text comes in ${plural(group.values.length, 'size')} where about ${needed} would do`,
     story,
@@ -185,6 +216,12 @@ function spacing({ audit, d, lineCost }: Context): PainPoint | null {
   return {
     id: 'spacing',
     area: 'spacing',
+    layer: 'Tokens & styles',
+    affects: 'Spacing',
+    count: uses,
+    countLabel: uses === 1 ? 'place uses a one-off gap' : 'places use one-off gaps',
+    summary: `Only ${Math.round(group.scale.fit * 100)}% of gaps and padding follow your ${base}px rhythm.`,
+    fixTitle: `Snap spacing to named ${base}px steps`,
     severity: group.scale.fit < 0.7 ? 'high' : group.scale.fit < 0.9 ? 'medium' : 'low',
     title: off.length ? `${plural(off.length, 'spacing value breaks', 'spacing values break')} your ${base}px rhythm` : `${group.values.length} spacing values where ${group.target} would do`,
     story:
@@ -235,9 +272,21 @@ function componentPoint(c: ComponentAnalysis, { d, lineCost }: Context): PainPoi
     story += ` Some are meant to be the same thing but were built slightly differently: ${variantLabel(a)} and ${variantLabel(b)} look alike, yet differ in ${listOf(diff.slice(0, 3))}.`;
   }
   if (excess > 0) story += ` Most products need about ${c.target} ${noun.replace(/s$/, '')} styles.`;
+  const keep = Math.min(c.variants.length - new Set(c.nearDuplicatePairs.map(([, j]) => j)).size, c.target);
+  const redundant = c.variants.filter((_, i) => i >= keep || c.nearDuplicatePairs.some(([, j]) => j === i));
+  const redundantUses = redundant.reduce((n, v) => n + v.count, 0);
+  const singular = noun.replace(/s$/, '');
   return {
     id: `component-${c.kind}`,
     area: 'components',
+    layer: 'Components',
+    affects: c.label,
+    count: redundantUses,
+    countLabel: redundantUses === 1 ? `${singular} uses an extra style` : `${noun} use an extra style`,
+    summary: pair
+      ? `${c.variants.length} ${singular} styles; ${variantLabel(c.variants[pair[0]]!)} and ${variantLabel(c.variants[pair[1]]!)} are near-copies.`
+      : `${c.variants.length} ${singular} styles where ${c.target} would do.`,
+    fixTitle: `Build one ${singular} component with ${keep} named styles`,
     severity: excess > c.target || c.nearDuplicatePairs.length >= 2 ? 'high' : 'medium',
     title: pair ? `Some of your ${noun} look almost identical but are built differently` : `Your ${noun} come in ${c.variants.length} styles where ${c.target} would do`,
     story,
@@ -285,6 +334,12 @@ function tokens({ audit }: Context): PainPoint | null {
   return {
     id: 'tokens',
     area: 'tokens',
+    layer: 'Tokens & styles',
+    affects: 'Design tokens',
+    count: retheme.literals,
+    countLabel: 'hand-typed values',
+    summary: `Only ${Math.round(t.coverage * 100)}% of styling uses tokens; a redesign means ${retheme.literals.toLocaleString('en-US')} manual edits.`,
+    fixTitle: 'Move your most-used values into design tokens',
     severity: t.coverage < 0.3 ? 'high' : 'medium',
     title: `${Math.round((1 - t.coverage) * 100)}% of your styling is typed in by hand`,
     story,
@@ -309,6 +364,12 @@ function contrast({ audit, d }: Context): PainPoint | null {
   return {
     id: 'contrast',
     area: 'accessibility',
+    layer: 'Elements',
+    affects: 'Readability',
+    count: failures.length,
+    countLabel: failures.length === 1 ? 'piece of text below standard' : 'pieces of text below standard',
+    summary: `The faintest scores ${worst.ratio}:1; the accessibility standard asks for 4.5:1.`,
+    fixTitle: 'Darken faint text to at least 4.5:1',
     severity: failures.length >= 5 || worst.ratio < 3 ? 'high' : 'medium',
     title: `${plural(failures.length, 'piece of text is', 'pieces of text are')} hard to read`,
     story: `Text needs enough contrast with its background to be read comfortably, in sunlight, on cheap screens, or by the many people with weaker eyesight. The accepted standard (WCAG AA) asks for a ratio of at least 4.5 to 1. For example, “${worst.text.slice(0, 48)}” is ${colourName(worst.foreground)} (${worst.foreground}) on ${colourName(worst.background)} (${worst.background}), which scores only ${worst.ratio} to 1.`,
@@ -336,6 +397,12 @@ function keyboard({ audit }: Context): PainPoint | null {
   return {
     id: 'keyboard',
     area: 'interaction',
+    layer: 'Elements',
+    affects: 'Keyboard access',
+    count: removed.length ? Math.max(1, missing) : missing,
+    countLabel: 'controls without a visible focus style',
+    summary: removed.length ? `The focus outline is switched off on ${what}, with nothing in its place.` : 'Controls rely on the browser’s default focus outline.',
+    fixTitle: 'Add one visible focus style everywhere',
     severity: removed.length > 0 ? 'high' : 'medium',
     title: removed.length ? 'Keyboard users can lose track of where they are' : `${plural(missing, 'control has', 'controls have')} no visible focus style`,
     story: removed.length
@@ -359,6 +426,12 @@ function unnamed({ audit, d }: Context): PainPoint | null {
   return {
     id: 'unnamed',
     area: 'accessibility',
+    layer: 'Elements',
+    affects: 'Screen readers',
+    count: controls.length,
+    countLabel: controls.length === 1 ? 'unlabelled control' : 'unlabelled controls',
+    summary: 'Icon-only controls are announced as just “button”.',
+    fixTitle: 'Label every icon-only button',
     severity: controls.length >= 5 ? 'high' : 'medium',
     title: `${plural(controls.length, 'icon button has', 'icon buttons have')} no name for screen readers`,
     story: controls.length === 1
@@ -380,9 +453,16 @@ function details({ audit, lineCost }: Context): PainPoint | null {
   if (lines.length === 0) return null;
   const cost = lines.map((l) => lineCost(l.key)).reduce((n, c) => n + (c?.cost ?? 0), 0);
   const hours = lines.map((l) => lineCost(l.key)).reduce((n, c) => n + (c?.hours ?? 0), 0);
+  const extra = lines.reduce((n, l) => n + l.excess, 0);
   return {
     id: 'details',
     area: 'shape',
+    layer: 'Tokens & styles',
+    affects: 'Corners & shadows',
+    count: extra,
+    countLabel: extra === 1 ? 'extra style' : 'extra styles',
+    summary: listOf(lines.map((l) => `${l.current} ${l.label.toLowerCase()} (${l.recommended} needed)`)) + '.',
+    fixTitle: 'Name a few corner, shadow and timing styles',
     severity: 'low',
     title: 'Small details vary more than they need to',
     story: `Corners, borders, shadows and animation timing are the details people feel rather than see. We found ${listOf(lines.map((l) => `${l.current} ${l.label.toLowerCase()} where ${l.recommended} would do`))}.`,

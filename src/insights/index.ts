@@ -12,10 +12,10 @@ import type { Audit } from '../audit';
 import type { AreaKey } from '../inference/types';
 import { formatMoney } from '../savings';
 import { pageName } from './describe';
-import { findPainPoints, type PainPoint } from './findings';
+import { findPainPoints, PROBLEM_LAYERS, type PainPoint, type ProblemLayer } from './findings';
 import { AREA_IMPACT, GLOSSARY, METRIC_LABELS, STATUS_LABELS, type HealthStatus } from './narrative';
 
-export { STATUS_LABELS, GLOSSARY, type HealthStatus, type PainPoint };
+export { STATUS_LABELS, GLOSSARY, type HealthStatus, type PainPoint, type ProblemLayer };
 export type { Evidence } from './findings';
 
 export interface AreaHealth {
@@ -41,6 +41,37 @@ export interface MetricRow {
   selectors: string[];
 }
 
+/** Problems grouped by where they live: tokens and styles, components, or individual elements. */
+export interface LayerSummary {
+  layer: ProblemLayer;
+  problems: number;
+  places: number;
+  annualCost: number;
+}
+
+/** One fix in part two, linked to the problem it solves. */
+export interface Fix {
+  /** 1-based number of the problem this fixes. */
+  problem: number;
+  title: string;
+  detail: string;
+  /** The realistic yearly saving (cost × realisation rate); null when it can't be priced. */
+  annualSaving: number | null;
+}
+
+/** A building block's count today and after the suggested cleanup. */
+export interface BeforeAfter {
+  label: string;
+  today: number;
+  after: number;
+}
+
+/** Something the product already does well. */
+export interface Strength {
+  title: string;
+  detail: string;
+}
+
 export interface PageSummary {
   name: string;
   url: string;
@@ -60,6 +91,10 @@ export interface ExecutiveSummary {
   subheadline: string;
   numbers: { pages: number; stylesFound: number; hoursLost: number; yearlyCost: number; recoverable: number };
   painPoints: PainPoint[];
+  layers: LayerSummary[];
+  fixes: Fix[];
+  beforeAfter: BeforeAfter[];
+  strengths: Strength[];
   /** Stock-take rows that need attention, biggest gaps first. */
   metrics: MetricRow[];
   /** Everything else we checked that is already in good shape. */
@@ -202,6 +237,13 @@ export function summarise(audit: Audit, options: { clientName?: string; dismisse
 
   const stylesFound = savings.lines.reduce((n, l) => n + l.current, 0);
   const metrics = metricRows(audit, painPoints);
+  const areas: AreaHealth[] = score.areas
+    .filter((a) => a.applicable)
+    .map((a) => {
+      const s = statusFor(a.score);
+      return { key: a.key, label: a.label, score: a.score, status: s, impact: AREA_IMPACT[a.key][s] };
+    });
+  const realised = (n: number | null) => (n ? Math.round(n * assumptions.realisationRate) : null);
   const headline =
     savings.annualDragCost > 0
       ? `Inconsistency is quietly costing your team about ${money(savings.annualDragCost)} a year.`
@@ -233,12 +275,25 @@ export function summarise(audit: Audit, options: { clientName?: string; dismisse
     painPoints,
     metrics: metrics.filter((m) => m.status !== 'strong'),
     healthyMetrics: metrics.filter((m) => m.status === 'strong'),
-    areas: score.areas
-      .filter((a) => a.applicable)
-      .map((a) => {
-        const s = statusFor(a.score);
-        return { key: a.key, label: a.label, score: a.score, status: s, impact: AREA_IMPACT[a.key][s] };
-      }),
+    layers: PROBLEM_LAYERS.map((layer) => {
+      const inLayer = painPoints.filter((p) => p.layer === layer);
+      return {
+        layer,
+        problems: inLayer.length,
+        places: inLayer.reduce((n, p) => n + p.count, 0),
+        annualCost: inLayer.reduce((n, p) => n + (p.annualCost ?? 0), 0),
+      };
+    }),
+    fixes: painPoints.map((p, i) => ({ problem: i + 1, title: p.fixTitle, detail: p.suggestion, annualSaving: realised(p.annualCost) })),
+    beforeAfter: savings.lines
+      .filter((l) => l.excess > 0)
+      .sort((a, b) => b.excess / b.current - a.excess / a.current)
+      .map((l) => ({ label: METRIC_LABELS[l.key]?.label ?? l.label.replace(' variants', ' styles'), today: l.current, after: l.recommended })),
+    strengths: areas
+      .filter((a) => a.status === 'strong')
+      .sort((a, b) => b.score - a.score)
+      .map((a) => ({ title: a.label, detail: a.impact })),
+    areas,
     glossary: GLOSSARY,
   };
 }

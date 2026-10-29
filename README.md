@@ -41,11 +41,15 @@ The one-time setup for both is in [docs/RELEASING.md](docs/RELEASING.md).
 
 **Client report.** Set your agency, name, contact details and an optional personal note once under `⋯` → *Report details…*. The client name comes from the page and can be changed per site. Then press **Download PDF report**. The report contains:
 
-- **A personal opening.** "Hi Acme team", what we looked at, and *something you may not know* (e.g. "27 colours, 10 of them near-identical copies").
-- **What it costs.** The yearly cost of inconsistency, what could be saved, team hours lost, and a consistency score with a plain explanation.
-- **What we found.** One card per problem, most important first. Each card says what we saw (with their own elements and colours), shows the evidence (swatches, sizes, contrast samples, look-alike components) and where it appears. It explains why it matters and ends with *What we'd suggest*.
-- **Your design system at a glance.** A stock-take table: what we found, what a tidy system has, status, and cost a year. Things already in good shape are summarised in one line.
-- **How we worked this out.** The method and every cost assumption in plain words, a glossary of the terms used, and a short *How we can help* paragraph with your contact details.
+- **Page 1, the whole picture at a glance:**
+  - a short personal note and the headline cost;
+  - four key numbers: yearly cost, could be saved, hours lost, consistency score;
+  - two charts: *where the cost comes from* and *health by area*;
+  - "Something you may not know".
+- **Part 1, the problems.** A problem map grouped into tokens and styles, components and elements, with the number of problems, places affected and cost for each group. Then a summary table (problem, what it affects, places, cost a year, priority) and one compact card per problem: three headline numbers, the evidence (swatches, sizes, contrast samples, look-alike components) and where it was seen.
+- **Part 2, the fixes.** One row per problem with the fix and what it realistically saves a year, an *after the cleanup* chart (styles today versus after) and the redesign hours with and without tokens.
+- **Part 3, what's working well.** The areas and building blocks that are already consistent.
+- **Appendix:** pages reviewed, how we worked it out, a glossary, and a short *How we can help* note with your contact details.
 
 The same content is available as a web report (HTML) or a Markdown summary for emails. Tune the cost model under *Savings assumptions…*.
 

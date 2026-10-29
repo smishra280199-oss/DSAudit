@@ -87,6 +87,31 @@ describe('executive summary', () => {
     expect(spacing).toMatchObject({ found: '20', healthy: 'about 12' });
   });
 
+  it('gives every problem a layer, a count of places, a one-line summary and a fix', () => {
+    for (const p of summary.painPoints) {
+      expect(['Tokens & styles', 'Components', 'Elements']).toContain(p.layer);
+      expect(p.count).toBeGreaterThan(0);
+      expect(p.summary.length).toBeLessThan(160);
+      expect(p.fixTitle).toBeTruthy();
+    }
+    const spacing = summary.painPoints.find((p) => p.id === 'spacing')!;
+    // 20 distinct paddings, of which 15 uses are off the 4px grid.
+    expect(spacing.count).toBe(15);
+  });
+
+  it('maps problems by layer, prices each fix and lists strengths', () => {
+    expect(summary.layers.map((l) => l.layer)).toEqual(['Tokens & styles', 'Components', 'Elements']);
+    expect(summary.layers.reduce((n, l) => n + l.problems, 0)).toBe(summary.painPoints.length);
+    summary.fixes.forEach((f, i) => {
+      const p = summary.painPoints[i]!;
+      expect(f.problem).toBe(i + 1);
+      expect(f.annualSaving).toBe(p.annualCost ? Math.round(p.annualCost * DEFAULT_ASSUMPTIONS.realisationRate) : null);
+    });
+    expect(summary.beforeAfter.every((b) => b.after < b.today)).toBe(true);
+    const strongAreas = summary.areas.filter((a) => a.status === 'strong').map((a) => a.label);
+    expect(summary.strengths.map((s) => s.title).sort()).toEqual(strongAreas.sort());
+  });
+
   it('labels area health and explains its terms', () => {
     expect([statusFor(90), statusFor(60), statusFor(20)]).toEqual(['strong', 'needs-work', 'at-risk']);
     expect(summary.glossary.map((g) => g.term)).toContain('Design token');

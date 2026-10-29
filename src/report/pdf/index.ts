@@ -18,6 +18,7 @@ import { formatMoney, formatMoneyShort } from '../../savings';
 import { parseColor } from '../../shared/color';
 import type { ClientReportOptions } from '../branding';
 import { formatDate } from '../format';
+import { barChart, beforeAfterChart, type BarRow } from './charts';
 import { Layout, type TextStyle } from './layout';
 import { COLORS, PAGE, TYPE } from './theme';
 
@@ -77,7 +78,7 @@ function card(l: Layout, content: (top: number) => number, gapAfter = 10): void 
   l.y = top + height + gapAfter;
 }
 
-// ── Page 1: hello, the hook, the numbers ─────────────────────────────────
+// ── Page 1: who, what, and the whole picture at a glance ─────────────────
 
 async function cover(l: Layout, { audit, summary, options }: Context): Promise<void> {
   const { snapshot } = audit;
@@ -85,46 +86,29 @@ async function cover(l: Layout, { audit, summary, options }: Context): Promise<v
 
   if (branding.agencyName) l.text(branding.agencyName, l.left, l.y, { size: 10.5, font: 'bold' });
   l.textRight(formatDate(snapshot.capturedAt), l.left + l.width, l.y + 1, { size: TYPE.small, color: COLORS.textSecondary });
-  l.gap(40);
+  l.gap(34);
 
   const shot = snapshot.screenshot ? await embedScreenshot(l, snapshot.screenshot) : null;
-  const shotWidth = shot ? 196 : 0;
+  const shotWidth = shot ? 170 : 0;
   const textWidth = l.width - (shot ? shotWidth + 24 : 0);
   const top = l.y;
   let y = top;
   y += l.text(summary.clientName, l.left, y, { size: TYPE.display, font: 'bold', lineHeight: 30 }, textWidth);
   const pages = summary.pages.length === 1 ? '1 page reviewed' : `${summary.pages.length} pages reviewed`;
   y += 4 + l.text(`Design system audit · ${pages}`, l.left, y + 4, secondary, textWidth);
-  y += 2 + l.text(snapshot.url, l.left, y + 2, { size: TYPE.small, color: COLORS.textTertiary }, textWidth);
+  y += 10 + l.text(summary.intro, l.left, y + 10, { ...secondary, size: TYPE.small, lineHeight: 11.5 }, textWidth);
+  const signature = [branding.preparedBy, branding.agencyName].filter(Boolean).join(', ');
+  if (signature) y += 6 + l.text(signature, l.left, y + 6, { size: TYPE.small, font: 'bold' }, textWidth);
 
   if (shot) {
-    const h = Math.min(124, (shotWidth * shot.height) / shot.width);
+    const h = Math.min(108, (shotWidth * shot.height) / shot.width);
     const w = (h * shot.width) / shot.height;
     const x = l.left + l.width - shotWidth;
     l.roundedRect(x, top, shotWidth, h + 12, 8, COLORS.surface, COLORS.border);
     l.page.drawImage(shot, { x: x + (shotWidth - w) / 2, y: PAGE.height - top - 6 - h, width: w, height: h });
     y = Math.max(y, top + h + 12);
   }
-  l.y = y + 20;
-
-  // A personal note: who is writing, and what this document is.
-  const signature = [branding.preparedBy, branding.agencyName].filter(Boolean).join(', ');
-  const greeting = `Hi ${summary.clientName === 'your product' ? 'there' : `${summary.clientName} team`},`;
-  card(l, (t) => {
-    let h = l.text(greeting, l.left + PAD, t, { ...body, font: 'bold' }, l.width - PAD * 2);
-    h += 6 + l.text(summary.intro, l.left + PAD, t + h + 6, body, l.width - PAD * 2);
-    if (branding.note.trim()) h += 6 + l.text(branding.note.trim(), l.left + PAD, t + h + 6, body, l.width - PAD * 2);
-    if (signature) h += 8 + l.text(signature, l.left + PAD, t + h + 8, secondary, l.width - PAD * 2);
-    return h;
-  });
-
-  if (summary.hook) {
-    card(l, (t) => {
-      let h = l.text('Something you may not know', l.left + PAD, t, { size: 11, font: 'bold' }, l.width - PAD * 2);
-      h += 4 + l.text(summary.hook!, l.left + PAD, t + h + 4, body, l.width - PAD * 2);
-      return h;
-    });
-  }
+  l.y = y + 16;
 }
 
 async function embedScreenshot(l: Layout, dataUrl: string) {
@@ -136,31 +120,376 @@ async function embedScreenshot(l: Layout, dataUrl: string) {
   }
 }
 
-function numbers(l: Layout, { audit, summary }: Context): void {
+function kpis(l: Layout, { audit, summary }: Context): void {
   const short = (n: number) => formatMoneyShort(n, audit.assumptions.currency);
   const n = summary.numbers;
-  heading(l, summary.headline, summary.subheadline);
   const tiles = [
-    { value: short(n.yearlyCost), caption: 'Estimated yearly cost of inconsistency' },
+    { value: short(n.yearlyCost), caption: 'Yearly cost of inconsistency (estimate)' },
     { value: short(n.recoverable), caption: 'Could be saved every year' },
     { value: `${n.hoursLost}h`, caption: 'Team hours lost each year' },
     { value: `${summary.score}/100`, caption: 'Consistency score (75+ is healthy)' },
   ];
+  l.y += l.text(summary.headline, l.left, l.y, { size: TYPE.title, font: 'bold' }, l.width);
+  l.y += 3 + l.text(summary.subheadline, l.left, l.y + 3, small, l.width) + 10;
   const gap = 8;
   const w = (l.width - gap * 3) / 4;
-  const h = 62;
+  const h = 58;
   l.ensure(h);
   tiles.forEach((tile, i) => {
     const x = l.left + i * (w + gap);
     l.card(x, l.y, w, h);
-    l.text(tile.value, x + 12, l.y + 12, { size: 17, font: 'bold' }, w - 24);
-    l.text(tile.caption, x + 12, l.y + 36, { size: TYPE.tiny, color: COLORS.textSecondary, lineHeight: 10 }, w - 24);
+    l.text(tile.value, x + 12, l.y + 11, { size: 17, font: 'bold' }, w - 24);
+    l.text(tile.caption, x + 12, l.y + 34, { size: TYPE.tiny, color: COLORS.textSecondary, lineHeight: 10 }, w - 24);
   });
-  l.y += h + 8;
-  l.y += l.text(summary.scoreExplainer, l.left, l.y, small) + 16;
+  l.y += h + 10;
 }
 
-// ── The problems, one card each ──────────────────────────────────────────
+/** Two charts side by side: where the cost comes from, and how each area scores. */
+function dashboard(l: Layout, { summary, audit }: Context): void {
+  const short = (n: number) => formatMoneyShort(n, audit.assumptions.currency);
+  const gap = 10;
+  const w = (l.width - gap) / 2;
+  const inner = w - PAD * 2;
+  const costRows: BarRow[] = summary.painPoints
+    .filter((p) => p.annualCost)
+    .sort((a, b) => (b.annualCost ?? 0) - (a.annualCost ?? 0))
+    .slice(0, 7)
+    .map((p) => ({ label: p.affects, value: p.annualCost!, valueLabel: short(p.annualCost!) }));
+  const healthRows: BarRow[] = [...summary.areas]
+    .sort((a, b) => a.score - b.score)
+    .map((a) => ({ label: a.label, value: a.score, valueLabel: String(a.score), dot: STATUS_COLOR[a.status] }));
+
+  const left = (top: number) => {
+    let h = l.text('Where the cost comes from', l.left + PAD, top, { size: 11, font: 'bold' }, inner);
+    h += 2 + l.text('Estimated yearly cost, by problem', l.left + PAD, top + h + 2, small, inner) + 10;
+    h += costRows.length
+      ? barChart(l, l.left + PAD, top + h, inner, costRows)
+      : l.text('Nothing here carries a measurable cost.', l.left + PAD, top + h, secondary, inner);
+    return h;
+  };
+  const right = (top: number) => {
+    const x = l.left + w + gap + PAD;
+    let h = l.text('Health by area', x, top, { size: 11, font: 'bold' }, inner);
+    h += 2 + l.text('Score out of 100, weakest first', x, top + h + 2, small, inner) + 8;
+    h += barChart(l, x, top + h, inner, healthRows, { max: 100, marker: { value: 75, label: 'Healthy' }, labelWidth: 104 });
+    return h;
+  };
+  const height = Math.max(l.measure(() => left(0)), l.measure(() => right(0))) + PAD * 2;
+  l.ensure(height);
+  const top = l.y;
+  l.card(l.left, top, w, height);
+  l.card(l.left + w + gap, top, w, height);
+  left(top + PAD);
+  right(top + PAD);
+  l.y = top + height + 10;
+}
+
+/** The three parts of the report, with how much is in each. */
+function contents(l: Layout, { summary }: Context): void {
+  const parts = [
+    { n: '1', title: 'The problems', detail: `${summary.painPoints.length} found: where, how often, what they cost` },
+    { n: '2', title: 'The fixes', detail: `${summary.fixes.length} suggestions and what each is worth` },
+    { n: '3', title: 'What’s working well', detail: `${summary.strengths.length + summary.healthyMetrics.length} things already in good shape` },
+  ];
+  const gap = 8;
+  const w = (l.width - gap * 2) / 3;
+  const h = 44;
+  l.ensure(h);
+  parts.forEach((p, i) => {
+    const x = l.left + i * (w + gap);
+    l.card(x, l.y, w, h);
+    l.roundedRect(x + 12, l.y + 12, 20, 20, 10, COLORS.sunken, COLORS.border);
+    l.text(p.n, x + 19.5, l.y + 17, { size: TYPE.small, font: 'bold', color: COLORS.textSecondary });
+    l.text(p.title, x + 40, l.y + 10, { size: TYPE.body, font: 'bold' }, w - 52);
+    l.text(p.detail, x + 40, l.y + 23, { size: TYPE.tiny, color: COLORS.textSecondary, lineHeight: 9.5 }, w - 52);
+  });
+  l.y += h + 10;
+}
+
+function hook(l: Layout, { summary }: Context): void {
+  if (!summary.hook) return;
+  card(l, (t) => {
+    let h = l.text('Something you may not know', l.left + PAD, t, { size: TYPE.body, font: 'bold' }, l.width - PAD * 2);
+    h += 3 + l.text(summary.hook!, l.left + PAD, t + h + 3, secondary, l.width - PAD * 2);
+    return h;
+  });
+}
+
+/** A part divider: "Part 1" over the part's title and one line of context. */
+function partHeading(l: Layout, part: number, title: string, subtitle: string): void {
+  l.addPage();
+  l.text(`Part ${part}`, l.left, l.y, { size: TYPE.small, color: COLORS.textSecondary });
+  l.y += 13;
+  l.y += l.text(title, l.left, l.y, { size: 20, font: 'bold', lineHeight: 24 });
+  l.y += 4 + l.text(subtitle, l.left, l.y + 4, secondary);
+  l.gap(16);
+}
+
+// ── Part 1: the problems ─────────────────────────────────────────────────
+
+function problemMap(l: Layout, { summary, money }: Context): void {
+  const gap = 8;
+  const w = (l.width - gap * 2) / 3;
+  const h = 62;
+  l.ensure(h);
+  summary.layers.forEach((layer, i) => {
+    const x = l.left + i * (w + gap);
+    l.card(x, l.y, w, h);
+    l.text(layer.layer, x + 12, l.y + 10, { size: TYPE.small, color: COLORS.textSecondary }, w - 24);
+    l.text(layer.problems === 1 ? '1 problem' : `${layer.problems} problems`, x + 12, l.y + 24, { size: 14, font: 'bold' }, w - 24);
+    const detail = layer.problems ? `${layer.places.toLocaleString('en-US')} places · ${layer.annualCost ? `${money(layer.annualCost)}/yr` : 'risk, not cost'}` : 'Nothing to fix';
+    l.text(detail, x + 12, l.y + 43, { size: TYPE.tiny, color: COLORS.textSecondary }, w - 24);
+  });
+  l.y += h + 10;
+}
+
+/** A table header band on a card, as in the reference's users table. */
+function tableHeader(l: Layout, top: number, height: number, columns: { label: string; x: number; right?: boolean }[]): void {
+  l.roundedRect(l.left + 0.75, top + 0.75, l.width - 1.5, height, 9, COLORS.canvas);
+  l.roundedRect(l.left + 0.75, top + 10, l.width - 1.5, height - 9.25, 0, COLORS.canvas);
+  l.rule(top + height, l.left, l.width);
+  const style: TextStyle = { size: TYPE.small, color: COLORS.textTertiary };
+  for (const c of columns) c.right ? l.textRight(c.label, c.x, top + 8, style) : l.text(c.label, c.x, top + 8, style);
+}
+
+function problemTable(l: Layout, { summary, money }: Context): void {
+  if (summary.painPoints.length === 0) return;
+  // Column anchors: left edges for text, right edges for numbers.
+  const col = { n: l.left + PAD, title: l.left + PAD + 18, affects: l.left + 252, places: l.left + 366, cost: l.left + 428, priority: l.left + 440 };
+  const titleW = col.affects - col.title - 10;
+  const rows = summary.painPoints.map((p) => ({ p, h: Math.max(14, l.textHeight(p.title, { size: TYPE.small, font: 'bold' }, titleW)) + 12 }));
+  const headH = 24;
+  const height = headH + rows.reduce((n, r) => n + r.h, 0) + 4;
+  l.ensure(height);
+  const top = l.y;
+  l.card(l.left, top, l.width, height);
+  tableHeader(l, top, headH, [
+    { label: '#', x: col.n },
+    { label: 'Problem', x: col.title },
+    { label: 'Affects', x: col.affects },
+    { label: 'Places', x: col.places, right: true },
+    { label: 'Cost a year', x: col.cost, right: true },
+    { label: 'Priority', x: col.priority },
+  ]);
+  let y = top + headH;
+  rows.forEach(({ p, h }, i) => {
+    if (i > 0) l.rule(y);
+    l.text(String(i + 1), col.n, y + 7, { size: TYPE.small, color: COLORS.textSecondary });
+    l.text(p.title, col.title, y + 7, { size: TYPE.small, font: 'bold' }, titleW);
+    l.text(p.affects, col.affects, y + 7, { size: TYPE.small, color: COLORS.textSecondary }, 76);
+    l.textRight(p.count.toLocaleString('en-US'), col.places, y + 7, { size: TYPE.small });
+    l.textRight(p.annualCost ? money(p.annualCost) : '—', col.cost, y + 7, { size: TYPE.small, color: p.annualCost ? COLORS.text : COLORS.textTertiary });
+    const pr = PRIORITY[p.severity];
+    l.status(pr.label, pr.color, col.priority, y + 8, TYPE.tiny);
+    y += h;
+  });
+  l.y = top + height + 14;
+}
+
+/** One problem, compact: headline numbers, one line of explanation, the evidence, where it was seen. */
+function problemCard(l: Layout, p: PainPoint, index: number, money: (n: number) => string): void {
+  const inner = l.width - PAD * 2;
+  const x = l.left + PAD;
+  const priority = PRIORITY[p.severity];
+  const stats = [
+    { value: p.count.toLocaleString('en-US'), label: p.countLabel },
+    { value: p.pages.length ? String(p.pages.length) : '—', label: p.pages.length === 1 ? 'page affected' : p.pages.length ? 'pages affected' : 'single page' },
+    { value: p.annualCost ? money(p.annualCost) : '—', label: p.annualCost ? 'estimated cost a year' : 'risk rather than cost' },
+  ];
+
+  const content = (top: number): number => {
+    const statusWidth = l.measure(() => l.status(priority.label, priority.color, 0, 0));
+    let y = top;
+    y += l.text(`${index}. ${p.title}`, x, y, { size: 11, font: 'bold', lineHeight: 14 }, inner - statusWidth - 12);
+    l.status(priority.label, priority.color, x + inner - statusWidth, top + 2);
+    y += 3 + l.text(p.summary, x, y + 3, secondary, inner);
+
+    // Three headline numbers in a row.
+    y += 10;
+    const sw = (inner - 16) / 3;
+    stats.forEach((s, i) => {
+      const sx = x + i * (sw + 8);
+      l.roundedRect(sx, y, sw, 38, 8, COLORS.canvas, COLORS.border);
+      l.text(s.value, sx + 10, y + 7, { size: 12, font: 'bold' }, sw - 20);
+      l.text(s.label, sx + 10, y + 23, { size: TYPE.tiny, color: COLORS.textSecondary }, sw - 20);
+    });
+    y += 38;
+
+    const ev = l.measure(() => evidence(l, p.evidence, x, 0, inner));
+    if (ev > 0) y += 12 + evidence(l, p.evidence, x, y + 12, inner);
+
+    const seen = [...p.where.map((w) => w.charAt(0).toUpperCase() + w.slice(1)), ...(p.where.length ? [] : p.pages)];
+    if (seen.length) {
+      y += 12 + l.text('Seen in', x, y + 12, label, inner);
+      y += 4;
+      let cx = x;
+      for (const item of seen.slice(0, 6)) {
+        const w = l.textWidth(item, { size: 7.5 }) + 10;
+        if (cx + w > x + inner) {
+          cx = x;
+          y += 18;
+        }
+        l.chip(item, cx, y);
+        cx += w + 6;
+      }
+      y += 15;
+    }
+    y += 10 + l.text(`Why it matters: ${p.why}`, x, y + 10, small, inner);
+    return y - top;
+  };
+
+  const height = l.measure(() => content(0)) + PAD * 2;
+  l.ensure(height);
+  const top = l.y;
+  l.card(l.left, top, l.width, height);
+  content(top + PAD);
+  l.y = top + height + 10;
+}
+
+function partProblems(l: Layout, ctx: Context): void {
+  const { summary } = ctx;
+  partHeading(l, 1, 'The problems', 'Where each problem lives, how many places it shows up and what it is likely costing your team. Most important first.');
+  if (summary.painPoints.length === 0) {
+    l.y += l.text('We didn’t find any problems worth reporting.', l.left, l.y, secondary) + 10;
+    return;
+  }
+  problemMap(l, ctx);
+  problemTable(l, ctx);
+  summary.painPoints.forEach((p, i) => problemCard(l, p, i + 1, ctx.money));
+}
+
+// ── Part 2: the fixes ────────────────────────────────────────────────────
+
+function partFixes(l: Layout, ctx: Context): void {
+  const { summary, money, audit } = ctx;
+  if (summary.fixes.length === 0) return;
+  const recoverable = summary.fixes.reduce((n, f) => n + (f.annualSaving ?? 0), 0);
+  partHeading(
+    l,
+    2,
+    'The fixes',
+    `What we would do about each problem, and what each fix is realistically worth: about ${money(recoverable)} a year together. Numbers match the problems in Part 1.`,
+  );
+
+  // Fix table: one row per fix, linked to the problem number.
+  const col = { n: l.left + PAD, fix: l.left + PAD + 18, saves: l.left + l.width - PAD };
+  const fixW = l.width - PAD * 2 - 18 - 90;
+  const rows = summary.fixes.map((f) => ({
+    f,
+    h: l.textHeight(f.title, { size: TYPE.body, font: 'bold' }, fixW) + 3 + l.textHeight(f.detail, small, fixW) + 14,
+  }));
+  const headH = 24;
+  let i = 0;
+  while (i < rows.length) {
+    l.ensure(headH + rows[i]!.h + 8);
+    const top = l.y;
+    let height = headH;
+    let j = i;
+    while (j < rows.length && top + height + rows[j]!.h + 8 <= PAGE.height - PAGE.margin - PAGE.footer) height += rows[j++]!.h;
+    height += 4;
+    l.card(l.left, top, l.width, height);
+    tableHeader(l, top, headH, [
+      { label: '#', x: col.n },
+      { label: 'Fix', x: col.fix },
+      { label: 'Saves a year', x: col.saves, right: true },
+    ]);
+    let y = top + headH;
+    for (let k = i; k < j; k += 1) {
+      const { f, h } = rows[k]!;
+      if (k > i) l.rule(y);
+      l.text(String(f.problem), col.n, y + 8, { size: TYPE.small, color: COLORS.textSecondary });
+      const th = l.text(f.title, col.fix, y + 7, { size: TYPE.body, font: 'bold' }, fixW);
+      l.text(f.detail, col.fix, y + 10 + th, small, fixW);
+      l.textRight(f.annualSaving ? money(f.annualSaving) : '—', col.saves, y + 8, { size: TYPE.body, font: f.annualSaving ? 'bold' : 'regular', color: f.annualSaving ? COLORS.text : COLORS.textTertiary });
+      y += h;
+    }
+    l.y = top + height + 12;
+    i = j;
+  }
+
+  if (summary.beforeAfter.length) {
+    section(l, 'After the cleanup', 'How many distinct styles you would maintain, today versus after the fixes above.', (t) =>
+      beforeAfterChart(l, l.left + PAD, t, l.width - PAD * 2, summary.beforeAfter.slice(0, 10)),
+    );
+  }
+
+  const { retheme } = audit.savings;
+  if (retheme.literals >= 10) {
+    section(l, 'A redesign, before and after tokens', 'Hours to change every hand-typed value once, for a rebrand or dark mode.', (t) =>
+      barChart(
+        l,
+        l.left + PAD,
+        t,
+        l.width - PAD * 2,
+        [
+          { label: 'Today', value: retheme.hoursToday, valueLabel: `${retheme.hoursToday}h` },
+          { label: 'With tokens', value: retheme.hoursWithTokens, valueLabel: `${retheme.hoursWithTokens}h` },
+        ],
+        { max: Math.max(retheme.hoursToday, 1) },
+      ),
+    );
+  }
+}
+
+// ── Part 3: what's working well ──────────────────────────────────────────
+
+function partStrengths(l: Layout, { summary }: Context): void {
+  partHeading(l, 3, 'What’s working well', 'Parts of your product that are already consistent. Worth protecting as the product grows.');
+  if (summary.strengths.length === 0 && summary.healthyMetrics.length === 0) {
+    l.y += l.text('Every area has room to improve, which also means every fix above pays off quickly.', l.left, l.y, secondary) + 16;
+    return;
+  }
+
+  // Strengths as a two-column grid of cards.
+  const gap = 8;
+  const w = (l.width - gap) / 2;
+  for (let i = 0; i < summary.strengths.length; i += 2) {
+    const pair = summary.strengths.slice(i, i + 2);
+    const draw = (s: (typeof pair)[number], x: number, top: number) => {
+      l.status('', COLORS.success, x + 12, top + 1, TYPE.body);
+      l.text(s.title, x + 22, top, { size: TYPE.body, font: 'bold' }, w - 34);
+      return 14 + l.text(s.detail, x + 12, top + 16, small, w - 24);
+    };
+    const h = Math.max(...pair.map((s) => l.measure(() => draw(s, 0, 0)))) + 24;
+    l.ensure(h);
+    pair.forEach((s, k) => {
+      const x = l.left + k * (w + gap);
+      l.card(x, l.y, w, h);
+      draw(s, x, l.y + 12);
+    });
+    l.y += h + gap;
+  }
+
+  if (summary.healthyMetrics.length) {
+    l.gap(8);
+    const rows = summary.healthyMetrics;
+    const headH = 24;
+    const rowH = 22;
+    const height = headH + rows.length * rowH + 4;
+    heading(l, 'Building blocks already in good shape', undefined, height);
+    l.ensure(height);
+    const top = l.y;
+    l.card(l.left, top, l.width, height);
+    const col = { what: l.left + PAD, found: l.left + 300, status: l.left + l.width - PAD };
+    tableHeader(l, top, headH, [
+      { label: 'Building block', x: col.what },
+      { label: 'In use', x: col.found },
+      { label: 'Status', x: col.status, right: true },
+    ]);
+    let y = top + headH;
+    rows.forEach((m, k) => {
+      if (k > 0) l.rule(y);
+      l.text(m.label, col.what, y + 7, { size: TYPE.small, font: 'bold' }, 270);
+      l.text(m.found, col.found, y + 7, { size: TYPE.small, color: COLORS.textSecondary });
+      const sw = l.measure(() => l.status(STATUS_LABELS[m.status], STATUS_COLOR[m.status], 0, 0, TYPE.tiny));
+      l.status(STATUS_LABELS[m.status], STATUS_COLOR[m.status], col.status - sw, y + 8, TYPE.tiny);
+      y += rowH;
+    });
+    l.y = top + height + 18;
+  }
+}
+
+// ── Evidence visuals ─────────────────────────────────────────────────────
 
 function evidence(l: Layout, e: Evidence, x: number, top: number, width: number): number {
   switch (e.kind) {
@@ -220,136 +549,6 @@ function evidence(l: Layout, e: Evidence, x: number, top: number, width: number)
     case 'none':
       return 0;
   }
-}
-
-function painPoint(l: Layout, p: PainPoint, index: number, money: (n: number) => string): void {
-  const inner = l.width - PAD * 2;
-  const x = l.left + PAD;
-  const priority = PRIORITY[p.severity];
-  const meta = [
-    p.pages.length ? `Seen on ${p.pages.slice(0, 4).join(', ')}` : '',
-    p.annualCost ? `about ${money(p.annualCost)} a year` : '',
-  ]
-    .filter(Boolean)
-    .join(' · ');
-
-  // Header and body share a card; the suggestion sits in a grey footer band, like the reference dialogs.
-  const content = (top: number): number => {
-    const statusWidth = l.measure(() => l.status(priority.label, priority.color, 0, 0));
-    let y = top;
-    y += l.text(`${index}. ${p.title}`, x, y, { size: 11, font: 'bold', lineHeight: 14 }, inner - statusWidth - 12);
-    l.status(priority.label, priority.color, x + inner - statusWidth, top + 2);
-    if (meta) y += 2 + l.text(meta, x, y + 2, small, inner);
-    y += 8 + l.text(p.story, x, y + 8, body, inner);
-
-    const ev = l.measure(() => evidence(l, p.evidence, x, 0, inner));
-    if (ev > 0) y += 10 + evidence(l, p.evidence, x, y + 10, inner);
-
-    if (p.where.length) {
-      y += 10 + l.text('Where we saw it', x, y + 10, label, inner);
-      y += 3 + l.text(p.where.map((w) => `• ${w.charAt(0).toUpperCase()}${w.slice(1)}`).join('\n'), x, y + 3, secondary, inner);
-    }
-    y += 10 + l.text('Why it matters', x, y + 10, label, inner);
-    y += 3 + l.text(p.why, x, y + 3, secondary, inner);
-    return y - top;
-  };
-  const footer = (top: number): number => {
-    let h = l.text('What we’d suggest', x, top, label, inner);
-    h += 3 + l.text(p.suggestion, x, top + h + 3, body, inner);
-    return h;
-  };
-
-  const bodyH = l.measure(() => content(0)) + PAD * 2;
-  const footH = l.measure(() => footer(0)) + 24;
-  l.ensure(bodyH + footH);
-  const top = l.y;
-  l.card(l.left, top, l.width, bodyH + footH);
-  l.roundedRect(l.left + 0.75, top + bodyH, l.width - 1.5, footH - 0.75, 9, COLORS.canvas);
-  l.roundedRect(l.left + 0.75, top + bodyH, l.width - 1.5, 10, 0, COLORS.canvas);
-  l.rule(top + bodyH, l.left, l.width);
-  content(top + PAD);
-  footer(top + bodyH + 12);
-  l.y = top + bodyH + footH + 10;
-}
-
-function painPoints(l: Layout, { summary, money }: Context): void {
-  if (summary.painPoints.length === 0) return;
-  l.addPage();
-  heading(
-    l,
-    'What we found',
-    'The problems we noticed, most important first. For each one we show where it appears, why it matters and what we would do about it.',
-  );
-  summary.painPoints.forEach((p, i) => painPoint(l, p, i + 1, money));
-  l.gap(8);
-}
-
-// ── Stock-take table ─────────────────────────────────────────────────────
-
-function stockTake(l: Layout, { summary, money }: Context): void {
-  if (summary.metrics.length + summary.healthyMetrics.length === 0) return;
-  heading(
-    l,
-    'Your design system at a glance',
-    'A stock-take of the building blocks in your product that need attention, compared with what a tidy design system usually has. The biggest gaps are at the top.',
-    160,
-  );
-  const col = { what: l.left + PAD, found: l.left + 230, healthy: l.left + 330, status: l.left + 410, cost: l.left + l.width - PAD };
-  const headH = 24;
-  const rows = summary.metrics.map((m) => ({
-    m,
-    h: Math.max(
-      l.textHeight(m.label, { size: TYPE.body, font: 'bold' }, 200) + 2 + (m.explainer ? l.textHeight(m.explainer, small, 200) : 0),
-      12 + (m.foundNote ? l.textHeight(m.foundNote, small, 92) : 0),
-    ) + 14,
-  }));
-
-  const drawHeader = (top: number) => {
-    l.roundedRect(l.left + 0.75, top + 0.75, l.width - 1.5, headH, 9, COLORS.canvas);
-    l.roundedRect(l.left + 0.75, top + 10, l.width - 1.5, headH - 9.25, 0, COLORS.canvas);
-    l.rule(top + headH, l.left, l.width);
-    const h: TextStyle = { size: TYPE.small, color: COLORS.textTertiary };
-    l.text('What we looked at', col.what, top + 8, h);
-    l.text('What we found', col.found, top + 8, h);
-    l.text('A tidy system has', col.healthy, top + 8, h);
-    l.text('Status', col.status, top + 8, h);
-    l.textRight('Cost a year', col.cost, top + 8, h);
-  };
-
-  // The table may span pages: each page gets its own card and header.
-  let i = 0;
-  while (i < rows.length) {
-    l.ensure(headH + rows[i]!.h + 8);
-    const top = l.y;
-    let height = headH;
-    let j = i;
-    while (j < rows.length && top + height + rows[j]!.h + 8 <= PAGE.height - PAGE.margin - PAGE.footer) height += rows[j++]!.h;
-    height += 6;
-    l.card(l.left, top, l.width, height);
-    drawHeader(top);
-    let y = top + headH;
-    for (let k = i; k < j; k += 1) {
-      const { m, h } = rows[k]!;
-      if (k > i) l.rule(y);
-      let ty = y + 7;
-      ty += l.text(m.label, col.what, ty, { size: TYPE.body, font: 'bold' }, 200);
-      if (m.explainer) l.text(m.explainer, col.what, ty + 2, small, 200);
-      l.text(m.found, col.found, y + 7, { size: TYPE.body, font: 'bold' });
-      if (m.foundNote) l.text(m.foundNote, col.found, y + 20, small, 92);
-      l.text(m.healthy, col.healthy, y + 7, { size: TYPE.body, color: COLORS.textSecondary }, 76);
-      l.status(STATUS_LABELS[m.status], STATUS_COLOR[m.status], col.status, y + 8);
-      l.textRight(m.annualCost ? money(m.annualCost) : '—', col.cost, y + 7, { size: TYPE.body, color: m.annualCost ? COLORS.text : COLORS.textTertiary });
-      y += h;
-    }
-    l.y = top + height + 8;
-    i = j;
-  }
-  if (summary.healthyMetrics.length) {
-    const fine = `Also checked and already in good shape: ${summary.healthyMetrics.map((m) => `${m.label.toLowerCase()} (${m.found})`).join(', ')}.`;
-    l.ensure(l.textHeight(fine, secondary, l.width));
-    l.y += l.text(fine, l.left, l.y, secondary, l.width);
-  }
-  l.gap(18);
 }
 
 // ── Pages, method, glossary, help ────────────────────────────────────────
@@ -439,9 +638,13 @@ export async function auditToPdf(audit: Audit, options: ClientReportOptions): Pr
 
   const l = new Layout(pdf, fonts);
   await cover(l, ctx);
-  numbers(l, ctx);
-  painPoints(l, ctx);
-  stockTake(l, ctx);
+  kpis(l, ctx);
+  dashboard(l, ctx);
+  contents(l, ctx);
+  hook(l, ctx);
+  partProblems(l, ctx);
+  partFixes(l, ctx);
+  partStrengths(l, ctx);
   pagesReviewed(l, ctx);
   method(l, ctx);
   glossary(l, ctx);
