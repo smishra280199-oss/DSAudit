@@ -5,9 +5,11 @@
  *   node scripts/build.mjs            production build
  *   node scripts/build.mjs --watch    rebuild on change
  *   node scripts/build.mjs --preview  build, watch and serve the preview page
+ *   node scripts/build.mjs --zip      also write system-audit-extension.zip (for the Web Store)
  */
 
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
@@ -47,7 +49,10 @@ const previewBuild = {
 async function copyStatic() {
   await rm(resolve(root, 'dist'), { recursive: true, force: true });
   await mkdir(resolve(root, 'dist'), { recursive: true });
-  await cp(resolve(root, 'public/manifest.json'), resolve(root, 'dist/manifest.json'));
+  // package.json is the single source of the version: `npm version patch` bumps both.
+  const manifest = JSON.parse(await readFile(resolve(root, 'public/manifest.json'), 'utf8'));
+  const { version } = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
+  await writeFile(resolve(root, 'dist/manifest.json'), `${JSON.stringify({ ...manifest, version }, null, 2)}\n`);
   await cp(resolve(root, 'public/panel.html'), resolve(root, 'dist/panel.html'));
   await cp(resolve(root, 'public/icons'), resolve(root, 'dist/icons'), { recursive: true });
 
@@ -63,6 +68,12 @@ await copyStatic();
 
 if (!watch) {
   await Promise.all([esbuild.build(extension), esbuild.build(previewBuild)]);
+  if (args.has('--zip')) {
+    const zip = resolve(root, 'system-audit-extension.zip');
+    await rm(zip, { force: true });
+    execFileSync('zip', ['-qr', zip, '.'], { cwd: resolve(root, 'dist') });
+    console.log(`Packed ${zip}`);
+  }
 } else {
   const contexts = await Promise.all([esbuild.context(extension), esbuild.context(previewBuild)]);
   await Promise.all(contexts.map((c) => c.watch()));

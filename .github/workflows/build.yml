@@ -1,0 +1,52 @@
+# Every push to main: check, build, and publish the ready-to-load extension
+#  - to the `extension` branch (clone it once, then just pull to update), and
+#  - as the "Latest build" release (a zip you can download).
+name: Build extension
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-extension
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run package
+
+      - name: Publish the built extension to the `extension` branch
+        run: |
+          cd dist
+          git init -q
+          git checkout -q -b extension
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "Build of ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" extension
+
+      - name: Update the "Latest build" release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest system-audit-extension.zip \
+            --title "Latest build" \
+            --notes "Built automatically from ${GITHUB_SHA::7}. Unzip and load the folder in chrome://extensions (Developer mode → Load unpacked)." \
+            --prerelease --target "$GITHUB_SHA"

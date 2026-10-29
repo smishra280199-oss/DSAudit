@@ -1,0 +1,60 @@
+# Publishing a version tag (v0.3.1, v0.4.0 …) uploads that version to the
+# existing Chrome Web Store listing and submits it for review. Users get it
+# as a normal update. Create a tag with `npm version patch && git push --follow-tags`.
+#
+# One-time setup is in docs/RELEASING.md. Until the secrets exist, this
+# workflow builds the zip and stops with a notice instead of failing.
+name: Publish to Chrome Web Store
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+      PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+      CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+      CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+      REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run package
+
+      - name: Check the tag matches package.json
+        if: github.ref_type == 'tag'
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match package.json version $version. Use 'npm version patch' to create tags."
+            exit 1
+          fi
+
+      - name: Keep the zip as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-audit-extension
+          path: system-audit-extension.zip
+
+      - name: Upload and submit for review
+        run: |
+          if [ -z "$EXTENSION_ID" ] || [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ] || [ -z "$REFRESH_TOKEN" ] || [ -z "$PUBLISHER_ID" ]; then
+            echo "::notice::Chrome Web Store secrets aren't set yet, so nothing was uploaded. See docs/RELEASING.md."
+            exit 0
+          fi
+          npx --yes chrome-webstore-upload-cli@4.0.2 --source system-audit-extension.zip

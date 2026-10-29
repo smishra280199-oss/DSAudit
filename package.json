@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "package": "node scripts/build.mjs --zip",
     "dev": "node scripts/build.mjs --watch",
     "preview": "node scripts/build.mjs --preview",
     "typecheck": "tsc --noEmit",

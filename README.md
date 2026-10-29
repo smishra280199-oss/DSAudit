@@ -23,6 +23,15 @@ Load `dist/` in `chrome://extensions` (Developer mode → Load unpacked). Open a
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run check` | Typecheck, test and build: run before every commit |
 
+## Updating
+
+You never need to remove and reinstall the extension:
+
+- **On your own Chrome:** every push to GitHub builds the extension onto the `extension` branch. Pull it with GitHub Desktop and click reload in `chrome://extensions`.
+- **On the Chrome Web Store:** run `npm version patch && git push --follow-tags`. The new version is uploaded to your existing listing as an update.
+
+The one-time setup for both is in [docs/RELEASING.md](docs/RELEASING.md).
+
 ## Using it
 
 1. **Capture page** (or press `C` in the panel). The first time, Chrome asks for optional access to all sites. Without it, only the tab you opened the panel on can be read and cross-origin stylesheets are skipped.
