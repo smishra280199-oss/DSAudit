@@ -217,7 +217,7 @@ function tokenOpportunities({ tokens }: OpportunityInput): Opportunity[] {
       severity: bySeverity(1 - (tokens.coverage ?? 0), 0.8, 0.5),
       title: `Tokenise ${literalCategories.map(([c]) => CATEGORY_LABELS[c as keyof typeof CATEGORY_LABELS].toLowerCase()).slice(0, 3).join(', ')}`,
       detail: `${plural(literals, 'declaration')} in these categories ${verb(literals, 'is', 'are')} written as literals, so themes and rebrands must edit each one.`,
-      fix: 'Introduce tokens for the most used values first; the Foundations tab lists them by usage.',
+      fix: 'Introduce tokens for the most used values first, then migrate the long tail.',
       affected: literals,
       effortHours: hours(literals * EFFORT_HOURS.literalToToken),
       selectors: [],

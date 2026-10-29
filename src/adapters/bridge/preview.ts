@@ -55,6 +55,11 @@ export class PreviewBridge implements Bridge {
     return { page: this.captureApi().capture([]), hostAccess: true };
   }
 
+  /** An iframe can't be screenshotted from script; reports simply omit the cover image. */
+  async captureScreenshot() {
+    return null;
+  }
+
   async highlight(_tab: TabInfo, selectors: string[], label?: string) {
     return this.captureApi().highlight(selectors, label);
   }

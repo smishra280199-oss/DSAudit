@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { hostOf, relativeTime } from '../../../../report/format';
 import { Avatar, Badge, ClockIcon, CompareIcon, DownloadIcon, EmptyState, List, Menu, Row, Search, TrashIcon, Card } from '../ui';
-import { exportHtml } from '../export';
+import { useReports } from '../use-reports';
 import { useNavigation } from '../navigation';
 import { useAuditState, useController } from '../use-audit';
 
@@ -9,6 +9,7 @@ export function HistoryView() {
   const controller = useController();
   const { history, audit, baseline } = useAuditState();
   const { go } = useNavigation();
+  const { downloadPdf } = useReports();
   const [query, setQuery] = useState('');
 
   if (history.length === 0) {
@@ -59,12 +60,12 @@ export function HistoryView() {
                             ]
                           : []),
                         {
-                          label: 'Export report',
+                          label: 'Download PDF report',
                           icon: <DownloadIcon />,
                           onSelect: () =>
                             void controller.open(meta.id).then(() => {
                               const opened = controller.getState().audit;
-                              if (opened) exportHtml(opened);
+                              if (opened) void downloadPdf(opened);
                             }),
                         },
                       ],

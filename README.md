@@ -4,6 +4,8 @@ A Chrome Manifest V3 side-panel extension that answers one question about any we
 
 It observes what a page renders and how its CSS is written, infers the design system behind it, scores it, and lists concrete, prioritised fixes with a planning estimate of what they are worth.
 
+It is built for outreach: capture a prospect's product and send them a **white-labelled PDF report** that a VP of Design or Product can read in two minutes. The report covers what inconsistency costs them each year, what they have versus what they need, where to start, and how your agency can help.
+
 ## Quick start
 
 ```bash
@@ -24,14 +26,21 @@ Load `dist/` in `chrome://extensions` (Developer mode → Load unpacked). Open a
 ## Using it
 
 1. **Capture page** (or press `C` in the panel). The first time, Chrome asks for optional access to all sites. Without it, only the tab you opened the panel on can be read and cross-origin stylesheets are skipped.
-2. **Overview**: the overall score, grade and confidence, a score per area, a savings estimate and the top opportunities.
+2. **Overview**: the executive view, matching page 1 of the client report. It shows the yearly cost of inconsistency, what's recoverable, the cleanup cost and payback, *what you have vs. what you need* (e.g. "23 colours in use, 15 needed, $2,720/yr"), the rebrand effort with and without tokens, the three places to start, and health by area.
 3. **Foundations**: colour (with a perceptual palette), type, spacing, shape, elevation, motion and tokens. Select any value to highlight where it is used on the page.
 4. **Components**: buttons, inputs, links, headings, cards, badges and avatars, grouped into visual variants and rebuilt from their captured styles.
 5. **Opportunities**: the ranked fix list. Search it, filter it, highlight affected elements, copy a fix, or dismiss items (dismissals are saved per snapshot).
 6. **Inspect** (`I`): click any element to see each style's computed value, the rule that wins, whether it uses a token, a suggested token, and its text contrast.
 7. **History**: every capture is stored locally. Reopen, compare with the current capture (per-area deltas), export or delete.
 
-The `⋯` menu exports an **HTML report**, the **JSON data** or a **Markdown summary**, and opens the **savings assumptions**. Keys `1`–`6` switch views.
+**Client reports.** Set your agency, your name, contact details and an optional personal note once under `⋯` → *Report details…*. The client name is derived from the page and can be overridden per site. Then use *Download PDF report* on the Overview. The PDF has these pages:
+
+1. **The money**: a headline cost, four KPIs, the consolidation table, rebrand effort and key facts, next to a screenshot of their product.
+2. **Where to start and where you stand**: three priorities, with area health in plain business language.
+3. **Recommended plan**: three phases with timelines and cost, plus a *How {your agency} can help* section with your contact details.
+4. **Appendix**: all findings, then method and assumptions.
+
+The same content is available as a web report (HTML), a Markdown summary for emails, or raw JSON. Tune the cost model under *Savings assumptions…*. Keys `1`–`6` switch views.
 
 All data stays on your machine, in `chrome.storage.local`.
 
@@ -44,9 +53,10 @@ src/
   inspect/       Cascade resolution for one picked element
   inference/     Snapshot → analysis: foundations, components, tokens, a11y, opportunities
   scoring/       Area scores, AREA_WEIGHTS, grade
-  savings/       Planning estimate under editable assumptions
+  savings/       Planning estimate: line items per redundant style, re-theme cost, cleanup
+  insights/      Executive summary: headline, consolidation, priorities, plan, plain-language copy
   audit/         Bundles snapshot + analysis + score + savings; compares audits
-  report/        HTML, Markdown and JSON exports
+  report/        Client reports: pdf/ (vector PDF via pdf-lib), HTML, Markdown, JSON, branding
   storage/       Key-value abstraction, snapshot store, settings
   adapters/
     bridge/      The Bridge interface + Chrome, Fake (tests) and Preview implementations

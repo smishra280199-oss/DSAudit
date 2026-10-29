@@ -166,5 +166,9 @@ export function analyseTokens(snapshot: PageSnapshot): TokenAnalysis {
     coverageByCategory,
     suggestions: suggestionsFor(snapshot, declarations),
     unusedTokens: [...names].filter((n) => !referenced.has(n)),
+    literalDeclarations: literal,
+    distinctLiteralValues: new Set(
+      declarations.filter((d) => d.kind === 'literal').map((d) => `${d.category}:${normaliseValue(d.value, d.category) ?? d.value}`),
+    ).size,
   };
 }

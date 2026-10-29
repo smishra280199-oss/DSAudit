@@ -109,3 +109,19 @@ describe('audit controller', () => {
     expect(after.savings.cleanupCost).toBe(Math.round(after.savings.cleanupHours * before.assumptions.hourlyRate * 2));
   });
 });
+
+describe('report details', () => {
+  it('remembers agency details globally and client names per site', async () => {
+    const { controller } = await setup();
+    await controller.capture();
+    expect(controller.clientName()).toBe('Example');
+    const branding = { agencyName: 'Northbeam', preparedBy: 'Sam', email: '', website: '', note: '' };
+    await controller.updateReportDetails(branding, 'Acme Inc.');
+    expect(controller.reportOptions()).toMatchObject({ branding, clientName: 'Acme Inc.' });
+
+    const reopened = new AuditController((controller as unknown as { bridge: FakeBridge }).bridge);
+    await reopened.init();
+    expect(reopened.getState().branding.agencyName).toBe('Northbeam');
+    expect(reopened.clientName()).toBe('Acme Inc.');
+  });
+});

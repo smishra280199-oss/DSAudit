@@ -124,6 +124,9 @@ export interface TokenAnalysis {
   suggestions: TokenSuggestion[];
   /** Tokens defined but never referenced by any readable declaration. */
   unusedTokens: string[];
+  /** Hard-coded (literal) declarations, and how many distinct values they boil down to. */
+  literalDeclarations: number;
+  distinctLiteralValues: number;
 }
 
 export interface ContrastIssue extends ContrastResult {

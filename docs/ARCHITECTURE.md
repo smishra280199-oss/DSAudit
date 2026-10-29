@@ -24,7 +24,7 @@ Nothing is injected in advance: the manifest declares no content scripts.
 | --- | --- | --- |
 | `shared/` | nothing | The `PageSnapshot` contract and pure helpers. Ships in both the page and the panel. |
 | `capture/`, `inspect/` | `shared/` | Runs in the inspected page. Takes a `Document`, so the same code serves the extension, the preview iframe and jsdom tests. No `chrome.*` except `capture/entry.ts`. |
-| `inference/`, `scoring/`, `savings/`, `audit/`, `report/` | `shared/` and each other, downwards | Pure and deterministic. Analyses are never stored; they are recomputed from the snapshot. |
+| `inference/`, `scoring/`, `savings/`, `audit/`, `insights/`, `report/` | `shared/` and each other, downwards | Pure and deterministic. Analyses are never stored; they are recomputed from the snapshot. |
 | `storage/` | `shared/`, `savings/` | Talks to a `KeyValueStore`, never to `chrome.storage` directly. |
 | `adapters/bridge/` | everything above | The only place browser APIs are used. |
 | `adapters/extension/panel/` | everything above | `AuditController` owns state and calls the Bridge. Views read state through `useAuditState()` and call controller methods. |
@@ -47,6 +47,17 @@ Nothing is injected in advance: the manifest declares no content scripts.
 - **Accessibility**: contrast against the composited backdrop, and unnamed buttons and links.
 - **Confidence**: everything the capture could not see.
 - **Opportunities**: one rule per concern, ranked by severity, each with rough effort hours.
+
+## From findings to a client report
+
+```
+analysis ─▶ savings.consolidationLines()   one line per style family: in use, needed, excess, hours and cost per year
+         ─▶ estimateSavings()              + re-theme cost (hard-coded edits today vs distinct values as tokens) + cleanup
+audit    ─▶ insights.summarise()           headline, KPIs, consolidation table, top 3 priorities, area health, phased plan
+         ─▶ report/pdf | html | markdown   three renderers of the same ExecutiveSummary, white-labelled via ReportBranding
+```
+
+Every money figure traces back to a line item, so a client can ask "where does $8,602 come from?" and get an answer. Business wording lives in `insights/narrative.ts`, separate from the calculations, so the copy can be tuned without touching the maths. The PDF is drawn as vector pages with pdf-lib (`report/pdf/layout.ts` is a small top-down layout engine) in the panel's visual language, using the colours in `report/pdf/theme.ts`, which mirror `tokens.css`.
 
 ## Testing
 

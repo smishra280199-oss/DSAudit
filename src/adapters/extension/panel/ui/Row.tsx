@@ -5,6 +5,8 @@ interface RowProps {
   leading?: ReactNode;
   title: ReactNode;
   meta?: ReactNode;
+  /** Let title and meta wrap instead of truncating, for sentences. */
+  wrap?: boolean;
   trailing?: ReactNode;
   /** Revealed on hover, e.g. a "more" menu. */
   actions?: ReactNode;
@@ -18,7 +20,7 @@ interface RowProps {
  * A list row: leading visual, title over meta, trailing figures and hover
  * actions. Interactive rows lift into a card on hover.
  */
-export function Row({ leading, title, meta, trailing, actions, selected, expanded, onClick, children }: RowProps) {
+export function Row({ leading, title, meta, wrap, trailing, actions, selected, expanded, onClick, children }: RowProps) {
   const onKeyDown = (event: KeyboardEvent) => {
     if (onClick && (event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) {
       event.preventDefault();
@@ -28,7 +30,7 @@ export function Row({ leading, title, meta, trailing, actions, selected, expande
   return (
     <li>
       <div
-        className={cx('ui-row', onClick && 'ui-row--interactive', selected && 'ui-row--selected')}
+        className={cx('ui-row', onClick && 'ui-row--interactive', selected && 'ui-row--selected', wrap && 'ui-row--wrap')}
         role={onClick ? 'button' : undefined}
         tabIndex={onClick ? 0 : undefined}
         aria-expanded={expanded}

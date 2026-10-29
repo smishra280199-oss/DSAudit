@@ -1,17 +1,19 @@
 /**
- * Savings: a planning estimate, not a measurement. It prices two things
- * under editable assumptions:
+ * Savings: a planning estimate, not a measurement. Every figure is built
+ * from line items that point at a concrete finding, so a client can trace
+ * "$X a year" back to "you use 27 colours where 15 would do".
  *
- *  - the one-time cleanup: the sum of each opportunity's effort hours;
- *  - the yearly drag of inconsistency: every redundant value or variant
- *    costs each UI contributor a little time per year (choosing between
- *    near-identical options, reviewing, fixing drift), and every literal
- *    costs a few minutes each time the product is re-themed.
+ *  - Consolidation lines: each redundant foundation value or component
+ *    variant costs every UI contributor some time per year (choosing between
+ *    near-identical options, reviewing, fixing drift).
+ *  - Re-theming: every hard-coded value has to be found and edited on each
+ *    re-theme or rebrand; with tokens, only each distinct value is edited once.
+ *  - Cleanup: the sum of each opportunity's effort hours.
  *
  * Only a share of the drag is realistically recovered (realisationRate).
  */
 
-import type { AuditAnalysis } from '../inference/types';
+import type { AuditAnalysis, FoundationGroup } from '../inference/types';
 
 export interface SavingsAssumptions {
   hourlyRate: number;
@@ -22,7 +24,7 @@ export interface SavingsAssumptions {
   hoursPerExcessValue: number;
   /** Hours per contributor per year lost to each redundant component variant. */
   hoursPerExcessVariant: number;
-  /** Minutes to edit one literal value during a re-theme or rebrand. */
+  /** Minutes to find and edit one hard-coded value during a re-theme or rebrand. */
   minutesPerLiteralEdit: number;
   /** Re-themes, rebrands or palette updates per year. */
   rethemesPerYear: number;
@@ -41,45 +43,152 @@ export const DEFAULT_ASSUMPTIONS: SavingsAssumptions = {
   realisationRate: 0.6,
 };
 
+/** The upper bound on perceptually distinct colours in a systematic palette. */
+export const PALETTE_TARGET = 20;
+
+/** One row of "what you have vs what you need". */
+export interface ConsolidationLine {
+  key: string;
+  label: string;
+  kind: 'value' | 'variant';
+  current: number;
+  recommended: number;
+  excess: number;
+  annualHours: number;
+  annualCost: number;
+  /** Elements using the redundant values, for highlighting. */
+  selectors: string[];
+}
+
+export interface RethemeCost {
+  /** Hard-coded declarations that each need an edit today. */
+  literals: number;
+  /** Distinct values: the edits needed once they are tokens. */
+  distinctValues: number;
+  hoursToday: number;
+  hoursWithTokens: number;
+}
+
 export interface SavingsEstimate {
+  lines: ConsolidationLine[];
+  retheme: RethemeCost;
   excessValues: number;
   excessVariants: number;
-  literalDeclarations: number;
   cleanupHours: number;
   cleanupCost: number;
+  /** What inconsistency costs per year today. */
   annualDragHours: number;
+  annualDragCost: number;
+  /** The realistic share of that drag a cleanup recovers. */
   annualSavingsHours: number;
   annualSavings: number;
   /** Months until the cleanup pays for itself; null when there is nothing to save. */
   paybackMonths: number | null;
+  /** Annual savings per unit of cleanup cost; null when there is no cleanup. */
+  returnMultiple: number | null;
+}
+
+const FOUNDATION_LINES: { foundation: keyof AuditAnalysis['foundations']; group: string; label: string }[] = [
+  { foundation: 'typography', group: 'font-size', label: 'Font sizes' },
+  { foundation: 'typography', group: 'font-weight', label: 'Font weights' },
+  { foundation: 'typography', group: 'line-height', label: 'Line heights' },
+  { foundation: 'typography', group: 'font-family', label: 'Font families' },
+  { foundation: 'spacing', group: 'spacing', label: 'Spacing values' },
+  { foundation: 'shape', group: 'radius', label: 'Corner radii' },
+  { foundation: 'shape', group: 'border-width', label: 'Border widths' },
+  { foundation: 'elevation', group: 'shadow', label: 'Shadows' },
+  { foundation: 'elevation', group: 'z-index', label: 'Layering (z-index)' },
+  { foundation: 'motion', group: 'duration', label: 'Animation timings' },
+];
+
+/** Near-duplicates collapse into their twin; the rest are capped at the group's target. */
+function recommendedFor(group: FoundationGroup): number {
+  const distinct = group.values.length - group.values.filter((v) => v.nearDuplicateOf).length;
+  return Math.min(distinct, group.target);
+}
+
+function line(
+  key: string,
+  label: string,
+  kind: ConsolidationLine['kind'],
+  current: number,
+  recommended: number,
+  selectors: string[],
+  a: SavingsAssumptions,
+): ConsolidationLine {
+  const excess = Math.max(0, current - recommended);
+  const annualHours = excess * a.contributors * (kind === 'value' ? a.hoursPerExcessValue : a.hoursPerExcessVariant);
+  return {
+    key,
+    label,
+    kind,
+    current,
+    recommended: Math.min(current, recommended),
+    excess,
+    annualHours: round(annualHours),
+    annualCost: Math.round(annualHours * a.hourlyRate),
+    selectors,
+  };
+}
+
+export function consolidationLines(analysis: AuditAnalysis, a: SavingsAssumptions): ConsolidationLine[] {
+  const lines: ConsolidationLine[] = [];
+
+  // Colours: near-duplicates merge into their cluster; clusters beyond the palette target are redundant too.
+  const palette = analysis.foundations.color.palette ?? [];
+  const colourValues = palette.flatMap((c) => c.members);
+  const redundantColours = [...palette.flatMap((c) => c.members.slice(1)), ...palette.slice(PALETTE_TARGET).map((c) => c.members[0]!)];
+  const colourSelectors = redundantColours.flatMap((m) => m.selectors).slice(0, 60);
+  lines.push(line('colors', 'Colours', 'value', colourValues.length, Math.min(palette.length, PALETTE_TARGET), colourSelectors, a));
+
+  for (const spec of FOUNDATION_LINES) {
+    const group = analysis.foundations[spec.foundation].groups.find((g) => g.key === spec.group);
+    if (!group || group.values.length === 0) continue;
+    const redundant = group.values.filter((v, i) => v.nearDuplicateOf || i >= group.target);
+    lines.push(line(spec.group, spec.label, 'value', group.values.length, recommendedFor(group), redundant.flatMap((v) => v.selectors).slice(0, 60), a));
+  }
+
+  for (const component of analysis.components) {
+    if (component.variants.length === 0) continue;
+    const merged = new Set(component.nearDuplicatePairs.map(([, j]) => j)).size;
+    const recommended = Math.min(component.variants.length - merged, component.target);
+    const rare = component.variants.slice(recommended).flatMap((v) => v.selectors).slice(0, 60);
+    lines.push(line(`component-${component.kind}`, `${component.label.slice(0, -1)} variants`, 'variant', component.variants.length, recommended, rare, a));
+  }
+  return lines;
 }
 
 export function estimateSavings(analysis: AuditAnalysis, a: SavingsAssumptions = DEFAULT_ASSUMPTIONS): SavingsEstimate {
-  const foundationGroups = Object.values(analysis.foundations).flatMap((f) => f.groups);
-  const excessValues =
-    foundationGroups.reduce((n, g) => n + Math.max(0, g.values.length - g.target), 0) +
-    Math.max(0, (analysis.foundations.color.palette?.length ?? 0) - 20);
-  const excessVariants = analysis.components.reduce((n, c) => n + Math.max(0, c.variants.length - c.target), 0);
-  const literalDeclarations = Object.values(analysis.tokens.coverageByCategory).reduce((n, c) => n + c.literal, 0);
+  const lines = consolidationLines(analysis, a);
+  const { literalDeclarations, distinctLiteralValues } = analysis.tokens;
+  const retheme: RethemeCost = {
+    literals: literalDeclarations,
+    distinctValues: distinctLiteralValues,
+    hoursToday: round((literalDeclarations * a.minutesPerLiteralEdit) / 60),
+    hoursWithTokens: round((distinctLiteralValues * a.minutesPerLiteralEdit) / 60),
+  };
 
-  const cleanupHours = analysis.opportunities.reduce((n, o) => n + o.effortHours, 0);
-  const annualDragHours =
-    a.contributors * (excessValues * a.hoursPerExcessValue + excessVariants * a.hoursPerExcessVariant) +
-    (literalDeclarations * a.minutesPerLiteralEdit * a.rethemesPerYear) / 60;
+  const consolidationHours = lines.reduce((n, l) => n + l.annualHours, 0);
+  const rethemeHours = Math.max(0, retheme.hoursToday - retheme.hoursWithTokens) * a.rethemesPerYear;
+  const annualDragHours = consolidationHours + rethemeHours;
   const annualSavingsHours = annualDragHours * a.realisationRate;
   const annualSavings = annualSavingsHours * a.hourlyRate;
+  const cleanupHours = analysis.opportunities.reduce((n, o) => n + o.effortHours, 0);
   const cleanupCost = cleanupHours * a.hourlyRate;
 
   return {
-    excessValues,
-    excessVariants,
-    literalDeclarations,
+    lines,
+    retheme,
+    excessValues: lines.filter((l) => l.kind === 'value').reduce((n, l) => n + l.excess, 0),
+    excessVariants: lines.filter((l) => l.kind === 'variant').reduce((n, l) => n + l.excess, 0),
     cleanupHours: round(cleanupHours),
     cleanupCost: Math.round(cleanupCost),
     annualDragHours: round(annualDragHours),
+    annualDragCost: Math.round(annualDragHours * a.hourlyRate),
     annualSavingsHours: round(annualSavingsHours),
     annualSavings: Math.round(annualSavings),
     paybackMonths: annualSavings > 0 ? round((cleanupCost / annualSavings) * 12) : null,
+    returnMultiple: cleanupCost > 0 ? round(annualSavings / cleanupCost) : null,
   };
 }
 
@@ -88,5 +197,11 @@ function round(n: number): number {
 }
 
 export function formatMoney(amount: number, currency: string): string {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
+}
+
+/** $12,400 → "$12.4k" for tight spaces such as KPI tiles. */
+export function formatMoneyShort(amount: number, currency: string): string {
+  if (Math.abs(amount) < 10_000) return formatMoney(amount, currency);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 }).format(amount);
 }

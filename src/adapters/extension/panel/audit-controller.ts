@@ -9,7 +9,16 @@ import type { InspectResult } from '../../../inspect/types';
 import type { SavingsAssumptions } from '../../../savings';
 import { capturability, type CapturabilityReason } from '../../../shared/restricted';
 import type { PageSnapshot, SnapshotMeta } from '../../../shared/snapshot';
-import { loadAssumptions, saveAssumptions } from '../../../storage/settings-store';
+import { defaultClientName, EMPTY_BRANDING, type ClientReportOptions, type ReportBranding } from '../../../report/branding';
+import { hostOf } from '../../../report/format';
+import {
+  loadAssumptions,
+  loadBranding,
+  loadClientNames,
+  saveAssumptions,
+  saveBranding,
+  saveClientNames,
+} from '../../../storage/settings-store';
 import { SnapshotStore } from '../../../storage/snapshot-store';
 import type { Bridge, TabInfo } from '../../bridge/types';
 
@@ -29,6 +38,10 @@ export interface AuditState {
   history: SnapshotMeta[];
   dismissed: string[];
   assumptions: SavingsAssumptions | null;
+  /** Agency details printed on client reports. */
+  branding: ReportBranding;
+  /** Client names the user set, keyed by host. */
+  clientNames: Record<string, string>;
   hostAccess: boolean;
   inspect: { active: boolean; result: InspectResult | null };
   toast: string | null;
@@ -52,6 +65,8 @@ export class AuditController {
     history: [],
     dismissed: [],
     assumptions: null,
+    branding: EMPTY_BRANDING,
+    clientNames: {},
     hostAccess: false,
     inspect: { active: false, result: null },
     toast: null,
@@ -85,15 +100,17 @@ export class AuditController {
   // ── Lifecycle ──────────────────────────────────────────────────────────
 
   async init(): Promise<void> {
-    const [tab, history, assumptions, hostAccess, asked] = await Promise.all([
+    const [tab, history, assumptions, branding, clientNames, hostAccess, asked] = await Promise.all([
       this.bridge.activeTab(),
       this.store.list(),
       loadAssumptions(this.bridge.storage),
+      loadBranding(this.bridge.storage),
+      loadClientNames(this.bridge.storage),
       this.bridge.hasHostAccess(),
       this.bridge.storage.get<boolean>(HOST_ACCESS_ASKED_KEY),
     ]);
     this.hostAccessAsked = asked === true;
-    this.set({ ready: true, history, assumptions, hostAccess });
+    this.set({ ready: true, history, assumptions, branding, clientNames, hostAccess });
     await this.onTabChanged(tab);
 
     this.unsubscribers.push(
@@ -143,7 +160,8 @@ export class AuditController {
         this.set({ hostAccess: granted });
       }
       const { page, hostAccess } = await this.bridge.capture(tab);
-      const snapshot: PageSnapshot = { ...page, id: newId(), favIconUrl: tab.favIconUrl, hostAccess };
+      const screenshot = (await this.bridge.captureScreenshot(tab)) ?? undefined;
+      const snapshot: PageSnapshot = { ...page, id: newId(), favIconUrl: tab.favIconUrl, hostAccess, screenshot };
       const audit = runAudit(snapshot, this.state.assumptions!);
       await this.store.save(snapshot, audit.score.overall);
       this.set({ status: 'idle', audit, baseline: null, dismissed: [], history: await this.store.list(), hostAccess });
@@ -248,6 +266,33 @@ export class AuditController {
     const audit = this.state.audit ? withAssumptions(this.state.audit, assumptions) : null;
     this.set({ assumptions, audit });
     await saveAssumptions(this.bridge.storage, assumptions);
+  }
+
+  // ── Report details ─────────────────────────────────────────────────────
+
+  /** The client name for the current audit: what the user typed for this site, or one derived from the page. */
+  clientName(): string {
+    const { audit, clientNames } = this.state;
+    if (!audit) return '';
+    return clientNames[hostOf(audit.snapshot.url)] || defaultClientName(audit.snapshot.title, audit.snapshot.url);
+  }
+
+  /** Everything a client report needs besides the audit. */
+  reportOptions(): ClientReportOptions {
+    return { branding: this.state.branding, clientName: this.clientName(), dismissed: this.state.dismissed };
+  }
+
+  async updateReportDetails(branding: ReportBranding, clientName: string): Promise<void> {
+    const { audit } = this.state;
+    const clientNames = { ...this.state.clientNames };
+    if (audit) {
+      const host = hostOf(audit.snapshot.url);
+      const derived = defaultClientName(audit.snapshot.title, audit.snapshot.url);
+      if (clientName.trim() && clientName.trim() !== derived) clientNames[host] = clientName.trim();
+      else delete clientNames[host];
+    }
+    this.set({ branding, clientNames });
+    await Promise.all([saveBranding(this.bridge.storage, branding), saveClientNames(this.bridge.storage, clientNames)]);
   }
 
   // ── Feedback ───────────────────────────────────────────────────────────

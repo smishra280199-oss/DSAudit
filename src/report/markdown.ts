@@ -1,34 +1,39 @@
-/** A Markdown summary of an audit, for pasting into tickets and docs. */
+/** A Markdown executive summary, for pasting into an email, ticket or doc. */
 
 import type { Audit } from '../audit';
+import { summarise, STATUS_LABELS } from '../insights';
 import { formatMoney } from '../savings';
-import { formatDate, hostOf, percent } from './format';
+import { defaultClientName, type ClientReportOptions } from './branding';
+import { formatDate } from './format';
 
-export function auditToMarkdown({ snapshot, analysis, score, savings, assumptions }: Audit): string {
+export function auditToMarkdown(audit: Audit, options?: ClientReportOptions): string {
+  const { snapshot, savings, assumptions } = audit;
+  const summary = summarise(audit, options?.dismissed);
+  const money = (n: number) => formatMoney(n, assumptions.currency);
+  const client = options?.clientName || defaultClientName(snapshot.title, snapshot.url);
+
   const lines = [
-    `# System Audit: ${snapshot.title || hostOf(snapshot.url)}`,
+    `# Design System Audit: ${client}`,
     '',
-    `${snapshot.url}  `,
-    `Captured ${formatDate(snapshot.capturedAt)} at ${snapshot.viewport.width}×${snapshot.viewport.height} · confidence ${analysis.confidence.level}`,
+    `${snapshot.url} · captured ${formatDate(snapshot.capturedAt)}`,
     '',
-    `**Score: ${score.overall}/100 (${score.grade}, ${score.maturity})**`,
+    `**${summary.headline}** ${summary.subheadline}`,
     '',
-    '| Area | Score | Notes |',
-    '| --- | ---: | --- |',
-    ...score.areas.filter((a) => a.applicable).map((a) => `| ${a.label} | ${a.score} | ${a.notes.slice(0, 2).join('; ')} |`),
-    '',
-    '## Top opportunities',
-    '',
-    ...analysis.opportunities.slice(0, 10).map((o) => `- **${o.title}** (${o.severity}, ~${o.effortHours}h). ${o.fix}`),
-    '',
-    '## Savings (planning estimate)',
-    '',
-    `- One-time cleanup: ~${savings.cleanupHours}h (${formatMoney(savings.cleanupCost, assumptions.currency)})`,
-    `- Recoverable each year: ~${savings.annualSavingsHours}h (${formatMoney(savings.annualSavings, assumptions.currency)})`,
-    `- Token coverage: ${percent(analysis.tokens.coverage)}`,
+    `- Yearly cost of inconsistency: **${money(savings.annualDragCost)}**`,
+    `- Recoverable every year: **${money(savings.annualSavings)}**`,
+    `- One-time cleanup: **${money(savings.cleanupCost)}** (${summary.cleanupDuration})`,
+    `- Design system maturity: **${summary.score}/100** (${summary.grade}, ${summary.maturity})`,
   ];
-  if (analysis.confidence.reasons.length > 0) {
-    lines.push('', '## Limits of this capture', '', ...analysis.confidence.reasons.map((r) => `- ${r}`));
+  if (summary.consolidation.length) {
+    lines.push('', '## What you have vs. what you need', '', '| Style | In use | Needed | Cost / year |', '| --- | ---: | ---: | ---: |');
+    for (const row of summary.consolidation) lines.push(`| ${row.label} | ${row.current} | ${row.recommended} | ${money(row.annualCost)} |`);
   }
+  if (summary.priorities.length) {
+    lines.push('', '## Where to start', '');
+    summary.priorities.forEach((p, i) => lines.push(`${i + 1}. **${p.title}** (~${p.effortHours}h). ${p.why}`));
+  }
+  lines.push('', '## Where you stand', '');
+  for (const area of summary.areas) lines.push(`- **${area.label}**: ${STATUS_LABELS[area.status]} (${area.score}). ${area.impact}`);
+  lines.push('', `_Costs are planning estimates (${assumptions.contributors} UI contributors at ${money(assumptions.hourlyRate)}/h). Confidence: ${audit.analysis.confidence.level}._`);
   return lines.join('\n');
 }

@@ -241,7 +241,7 @@
 
 .stat-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-2);
 }
 
@@ -446,4 +446,97 @@
 
 .contrast__text strong {
   font-weight: var(--weight-medium);
+}
+
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ── Executive overview ─────────────────────────────────── */
+
+.hero .ui-card__body {
+  padding: var(--space-4);
+}
+
+.hero {
+  box-shadow: var(--shadow-card), inset 3px 0 0 var(--accent);
+}
+
+.hero__eyebrow {
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hero__figure {
+  margin-top: var(--space-1);
+  font-size: 34px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero__unit {
+  color: var(--text-tertiary);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0;
+}
+
+.hero__text {
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+}
+
+.hero__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.consolidation__cost {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+
+.consolidation__pct {
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+}
+
+.callout {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.callout strong {
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+}
+
+.step {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Toast } from './ui';
 import { CaptureGate } from './components/CaptureGate';
 import { Header } from './components/Header';
+import { ReportDetailsDialog } from './components/ReportDetailsDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { TabBar, TABS } from './components/TabBar';
 import { NavigationContext, type FoundationSegment, type Navigation, type ViewKey } from './navigation';
@@ -32,6 +33,7 @@ export function App() {
   const [view, setView] = useState<ViewKey>('overview');
   const [foundation, setFoundation] = useState<FoundationSegment>('color');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const go = useCallback((next: ViewKey, nextFoundation?: FoundationSegment) => {
     setView(next);
@@ -39,14 +41,14 @@ export function App() {
   }, []);
 
   const navigation = useMemo<Navigation>(
-    () => ({ view, foundation, go, openSettings: () => setSettingsOpen(true) }),
+    () => ({ view, foundation, go, openSettings: () => setSettingsOpen(true), openReportDetails: () => setDetailsOpen(true) }),
     [view, foundation, go],
   );
 
   // Panel shortcuts: C capture, I inspect, 1–6 switch views.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target) || settingsOpen) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target) || settingsOpen || detailsOpen) return;
       const key = event.key.toLowerCase();
       if (key === 'c') void controller.capture();
       else if (key === 'i') {
@@ -56,7 +58,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [controller, settingsOpen]);
+  }, [controller, settingsOpen, detailsOpen]);
 
   // Leaving Inspect turns Inspect mode off so the page behaves normally again.
   useEffect(() => {
@@ -78,6 +80,7 @@ export function App() {
         </main>
         <TabBar badge={{ opportunities: openOpportunities }} />
         <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        <ReportDetailsDialog open={detailsOpen} onClose={() => setDetailsOpen(false)} />
         {toast && <Toast message={toast} />}
       </div>
     </NavigationContext.Provider>

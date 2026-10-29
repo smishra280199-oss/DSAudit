@@ -30,7 +30,7 @@ class ChromeStorage implements KeyValueStore {
 /** Chrome omits url and title for tabs the extension can't access; they come through as ''. */
 function toTabInfo(tab: chrome.tabs.Tab | undefined): TabInfo | null {
   if (!tab?.id) return null;
-  return { id: tab.id, url: tab.url ?? '', title: tab.title ?? '', favIconUrl: tab.favIconUrl };
+  return { id: tab.id, url: tab.url ?? '', title: tab.title ?? '', favIconUrl: tab.favIconUrl, windowId: tab.windowId };
 }
 
 async function fetchSheet(href: string): Promise<FetchedSheet | null> {
@@ -92,6 +92,15 @@ export class ChromeBridge implements Bridge {
       [fetched],
     );
     return { page, hostAccess };
+  }
+
+  async captureScreenshot(tab: TabInfo): Promise<string | null> {
+    if (tab.windowId === undefined) return null;
+    try {
+      return await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 70 });
+    } catch {
+      return null;
+    }
   }
 
   highlight(tab: TabInfo, selectors: string[], label?: string) {

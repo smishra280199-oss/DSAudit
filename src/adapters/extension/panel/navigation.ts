@@ -11,6 +11,7 @@ export interface Navigation {
   foundation: FoundationSegment;
   go: (view: ViewKey, foundation?: FoundationSegment) => void;
   openSettings: () => void;
+  openReportDetails: () => void;
 }
 
 export const NavigationContext = createContext<Navigation | null>(null);

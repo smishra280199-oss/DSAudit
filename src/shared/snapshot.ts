@@ -205,6 +205,8 @@ export interface PageSnapshot {
   colorScheme: 'light' | 'dark';
   /** False when the user declined the optional all-URLs host permission. */
   hostAccess: boolean;
+  /** JPEG data URL of the visible viewport at capture time, for report covers. */
+  screenshot?: string;
   rendered: RenderedLayer;
   authored: AuthoredLayer;
 }

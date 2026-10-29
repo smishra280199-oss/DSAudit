@@ -14,6 +14,7 @@ export interface TabInfo {
   url: string;
   title: string;
   favIconUrl?: string;
+  windowId?: number;
 }
 
 export interface CaptureOutcome {
@@ -44,6 +45,8 @@ export interface Bridge {
   requestHostAccess(): Promise<boolean>;
 
   capture(tab: TabInfo): Promise<CaptureOutcome>;
+  /** JPEG data URL of the tab's visible area, or null when it can't be taken. */
+  captureScreenshot(tab: TabInfo): Promise<string | null>;
   highlight(tab: TabInfo, selectors: string[], label?: string): Promise<number>;
   clearHighlights(tab: TabInfo): Promise<void>;
   setInspectMode(tab: TabInfo, on: boolean): Promise<void>;

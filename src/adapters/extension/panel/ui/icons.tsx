@@ -219,3 +219,17 @@ export function LogoMark({ size = 24 }: { size?: number }) {
     </svg>
   );
 }
+
+export const UserIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="8" cy="5.5" r="2.5" />
+    <path d="M3 13.5c.6-2.4 2.6-4 5-4s4.4 1.6 5 4" />
+  </Icon>
+);
+
+export const FileIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 2.5h5l3 3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" />
+    <path d="M9 2.5v3h3M5.5 9h5M5.5 11.5h3" />
+  </Icon>
+);

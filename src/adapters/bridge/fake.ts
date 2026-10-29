@@ -59,6 +59,11 @@ export class FakeBridge implements Bridge {
     return { page: structuredClone(this.page), hostAccess: this.hostAccess };
   }
 
+  async captureScreenshot(tab: TabInfo) {
+    this.record('captureScreenshot', tab.id);
+    return null;
+  }
+
   async highlight(tab: TabInfo, selectors: string[], label?: string) {
     this.record('highlight', tab.id, selectors, label);
     return selectors.length;
