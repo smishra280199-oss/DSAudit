@@ -46,36 +46,54 @@ describe('consolidation lines', () => {
 
 describe('executive summary', () => {
   const audit = runAudit(snapshot, DEFAULT_ASSUMPTIONS);
-  const summary = summarise(audit);
+  const summary = summarise(audit, { clientName: 'Acme' });
 
-  it('leads with the yearly cost', () => {
-    expect(summary.headline).toMatch(/^Inconsistency is costing an estimated \$[\d,]+ a year\.$/);
-    expect(summary.subheadline).toContain('pays back in');
+  it('leads with the yearly cost in plain words, and never prices a service', () => {
+    expect(summary.headline).toMatch(/^Inconsistency is quietly costing your team about \$[\d,]+ a year\.$/);
+    const text = JSON.stringify(summary);
+    expect(text).not.toMatch(/cleanup|payback|invoice us|our fee/i);
   });
 
-  it('lists only what needs consolidating, costliest first', () => {
-    expect(summary.consolidation.every((l) => l.excess > 0)).toBe(true);
-    expect(summary.consolidation.map((l) => l.annualCost)).toEqual([...summary.consolidation.map((l) => l.annualCost)].sort((a, b) => b - a));
+  it('speaks to the client personally', () => {
+    expect(summary.intro).toContain('of Acme the way your customers see it');
+    // One colour copy is too little to lead with, so the hook falls back to the contrast finding.
+    expect(summary.hook).toMatch(/hard to read/);
   });
 
-  it('puts high-severity, cheap fixes first and leaves out dismissed ones', () => {
-    expect(summary.priorities[0]!.severity).toBe('high');
-    const without = summarise(audit, [summary.priorities[0]!.id]);
-    expect(without.priorities.map((p) => p.id)).not.toContain(summary.priorities[0]!.id);
+  it('turns findings into pain points with their own examples', () => {
+    const colours = summary.painPoints.find((p) => p.id === 'colours')!;
+    expect(colours.title).toMatch(/exists in 2 slightly different shades/);
+    expect(colours.story).toContain('#5b3df5');
+    expect(colours.evidence.kind).toBe('colours');
+    expect(colours.annualCost).toBeGreaterThan(0);
+    const contrast = summary.painPoints.find((p) => p.id === 'contrast')!;
+    expect(contrast.story).toContain('“Faint”');
   });
 
-  it('groups findings into a phased plan with timelines', () => {
-    expect(summary.plan.map((p) => p.name)).toContain('Foundations & tokens');
-    expect(summary.plan.every((p) => p.weeks >= 0.5 && p.items.length > 0)).toBe(true);
+  it('orders pain points by priority and leaves out the ones you exclude', () => {
+    const rank = { high: 3, medium: 2, low: 1 };
+    const points = summary.painPoints;
+    expect(points.every((p, i) => i === 0 || rank[points[i - 1]!.severity] >= rank[p.severity])).toBe(true);
+    const without = summarise(audit, { dismissed: [points[0]!.id] });
+    expect(without.painPoints.map((p) => p.id)).not.toContain(points[0]!.id);
   });
 
-  it('labels area health in plain language', () => {
+  it('splits the stock-take into gaps (worst first) and things already fine', () => {
+    expect(summary.metrics.every((m) => m.status !== 'strong')).toBe(true);
+    expect(summary.healthyMetrics.every((m) => m.status === 'strong')).toBe(true);
+    const order = { 'at-risk': 0, 'needs-work': 1, strong: 2 };
+    expect(summary.metrics.every((m, i) => i === 0 || order[summary.metrics[i - 1]!.status] <= order[m.status])).toBe(true);
+    const spacing = summary.metrics.find((m) => m.key === 'spacing')!;
+    expect(spacing).toMatchObject({ found: '20', healthy: 'about 12' });
+  });
+
+  it('labels area health and explains its terms', () => {
     expect([statusFor(90), statusFor(60), statusFor(20)]).toEqual(['strong', 'needs-work', 'at-risk']);
-    expect(summary.areas.every((a) => a.impact.length > 20)).toBe(true);
+    expect(summary.glossary.map((g) => g.term)).toContain('Design token');
   });
 
   it('says so when there is nothing to recover', () => {
-    const tidy = summarise(runAudit(makeSnapshot({ elements: [{ text: 'Hi' }] }), DEFAULT_ASSUMPTIONS));
+    const tidy = summarise(runAudit(makeSnapshot({ elements: [{ text: 'Hi' }] }), DEFAULT_ASSUMPTIONS), { clientName: 'Tidy' });
     expect(tidy.headline).toMatch(/built consistently/);
   });
 });

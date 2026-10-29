@@ -46,7 +46,7 @@ export function TokensSection() {
                   trailing={
                     <>
                       <div className="area-meter">
-                        <Meter value={c.coverage * 100} tone="accent" label={`${CATEGORY_LABELS[category]} coverage`} />
+                        <Meter value={c.coverage * 100} label={`${CATEGORY_LABELS[category]} coverage`} />
                       </div>
                       <span className="area-score">{percent(c.coverage)}</span>
                     </>

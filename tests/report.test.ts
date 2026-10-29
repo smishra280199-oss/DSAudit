@@ -31,7 +31,9 @@ describe('client reports', () => {
     const html = auditToHtml(audit, options);
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('Acme &amp; Co');
-    expect(html).toContain('Inconsistency is costing an estimated');
+    expect(html).toContain('Inconsistency is quietly costing your team');
+    expect(html).toContain('What we found');
+    expect(html).not.toMatch(/cleanup|payback/i);
     expect(html).toContain('How Northbeam Studio can help');
     expect(html).toContain('sam@northbeam.test');
   });
@@ -51,10 +53,10 @@ describe('client reports', () => {
     expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThanOrEqual(2);
   });
 
-  it('summarises the money and consolidation in Markdown', () => {
+  it('summarises the findings in Markdown for an email', () => {
     const md = auditToMarkdown(audit, options);
-    expect(md).toContain('# Design System Audit: Acme & Co');
-    expect(md).toContain('| Spacing values | 20 | 12 |');
+    expect(md).toContain('# Design system audit: Acme & Co');
+    expect(md).toContain('| Spacing values | 20 | about 12 |');
   });
 
   it('keeps PDF text within the standard font encoding', () => {

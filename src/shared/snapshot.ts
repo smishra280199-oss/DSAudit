@@ -207,8 +207,22 @@ export interface PageSnapshot {
   hostAccess: boolean;
   /** JPEG data URL of the visible viewport at capture time, for report covers. */
   screenshot?: string;
+  /**
+   * Present when this snapshot combines several captured pages (a multi-page
+   * audit). Element selectors are then page-scoped; see page-scope.ts.
+   */
+  pages?: PageRef[];
   rendered: RenderedLayer;
   authored: AuthoredLayer;
+}
+
+/** One page inside a multi-page audit. */
+export interface PageRef {
+  snapshotId: string;
+  url: string;
+  title: string;
+  capturedAt: string;
+  elementCount: number;
 }
 
 /** Lightweight record kept in the snapshot index so history renders without loading every snapshot. */
@@ -220,4 +234,6 @@ export interface SnapshotMeta {
   capturedAt: string;
   score: number;
   elementCount: number;
+  /** Number of pages, for multi-page audits. */
+  pageCount?: number;
 }

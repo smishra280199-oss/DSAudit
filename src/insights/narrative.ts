@@ -4,7 +4,7 @@
  * the wording can be tuned without touching any calculation.
  */
 
-import type { AreaKey, OpportunityKind } from '../inference/types';
+import type { AreaKey } from '../inference/types';
 
 export type HealthStatus = 'strong' | 'needs-work' | 'at-risk';
 
@@ -68,23 +68,41 @@ export const AREA_IMPACT: Record<AreaKey, Record<HealthStatus, string>> = {
   },
 };
 
-/** Why an opportunity matters, in business terms. */
-export const OPPORTUNITY_IMPACT: Record<OpportunityKind, string> = {
-  'merge-near-duplicate-colors': 'Near-identical colours look like mistakes and make every colour choice slower.',
-  'reduce-palette': 'A smaller palette makes the brand recognisable and design decisions faster.',
-  'consolidate-type-scale': 'A defined type scale removes guesswork and keeps hierarchy consistent.',
-  'off-scale-spacing': 'A single spacing grid cuts layout debates and review rounds.',
-  'reduce-shape-values': 'Fewer corner and border styles make the product feel like one system.',
-  'reduce-elevation-values': 'A few defined elevation levels prevent overlap bugs and visual clutter.',
-  'unify-motion': 'Shared timing makes interactions feel deliberate and polished.',
-  'tokenize-literals': 'Tokens turn rebrands, dark mode and palette changes from weeks of edits into a config change.',
-  'adopt-existing-tokens': 'Quick win: these values already have tokens; switching costs little and stops drift.',
-  'component-variant-sprawl': 'Fewer, named variants mean less design, build and QA work for every new feature.',
-  'merge-near-duplicate-variants': 'Near-identical variants are duplicated effort with no user benefit.',
-  'focus-outline-removed': 'Keyboard users can’t see where they are, a common accessibility failure.',
-  'missing-focus-style': 'A consistent focus style is required for keyboard accessibility.',
-  'missing-hover-style': 'Hover feedback makes the product feel responsive and clickable things obvious.',
-  'low-contrast': 'Low-contrast text is hard to read for many users and fails WCAG AA.',
-  'missing-accessible-name': 'Screen-reader users can’t tell what these controls do.',
-  'mixed-naming-conventions': 'Several styling approaches side by side slow onboarding and make changes riskier.',
+/** Plain-language definitions for readers who have never seen a design audit. */
+export const GLOSSARY: { term: string; meaning: string }[] = [
+  {
+    term: 'Design system',
+    meaning: 'The shared set of colours, text styles, spacing and components a product is built from. When it works, every screen looks like it belongs to the same product.',
+  },
+  {
+    term: 'Design token',
+    meaning: 'A named value, like “brand-primary” or “space-medium”, used instead of typing the raw value each time. Change the token once and every screen updates.',
+  },
+  {
+    term: 'Component and variant',
+    meaning: 'A reusable building block such as a button or a card. Variants are its intentional versions (primary, secondary…). Unintentional near-copies are what we flag.',
+  },
+  {
+    term: 'Type scale and spacing rhythm',
+    meaning: 'A short, fixed set of text sizes and gaps that everything snaps to, so layouts feel calm and consistent.',
+  },
+  {
+    term: 'Contrast ratio (WCAG)',
+    meaning: 'How strongly text stands out from its background. The WCAG accessibility standard asks for at least 4.5 to 1 for normal text.',
+  },
+];
+
+/** How each consolidation line is labelled and explained in the metrics table. */
+export const METRIC_LABELS: Record<string, { label: string; explainer: string }> = {
+  colors: { label: 'Colours', explainer: 'Every distinct colour used for text, backgrounds and borders' },
+  'font-size': { label: 'Text sizes', explainer: 'Every distinct size of text' },
+  'font-weight': { label: 'Font weights', explainer: 'How many levels of boldness are used' },
+  'line-height': { label: 'Line heights', explainer: 'The spacing between lines of text' },
+  'font-family': { label: 'Typefaces', explainer: 'Different fonts in use' },
+  spacing: { label: 'Spacing values', explainer: 'Distinct gaps, padding and margins' },
+  radius: { label: 'Corner styles', explainer: 'How rounded corners are' },
+  'border-width': { label: 'Border thicknesses', explainer: 'Distinct border widths' },
+  shadow: { label: 'Shadow styles', explainer: 'Distinct drop shadows' },
+  'z-index': { label: 'Layering levels', explainer: 'How elements are stacked on top of each other' },
+  duration: { label: 'Animation timings', explainer: 'Distinct animation speeds' },
 };

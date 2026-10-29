@@ -1,7 +1,7 @@
 /**
  * A small top-down layout engine over pdf-lib: pages with the canvas
  * background, a cursor that flows down the page and breaks to a new page,
- * text wrapping, rounded cards, pills and bars. Coordinates passed in are
+ * text wrapping, cards, chips, status dots and swatches. Coordinates passed in are
  * measured from the top of the page, as in CSS.
  */
 
@@ -45,6 +45,8 @@ export function pdfSafe(text: string): string {
 export class Layout {
   readonly pages: PDFPage[] = [];
   page!: PDFPage;
+  /** While true, nothing is drawn: used by measure() to size cards before drawing them. */
+  private dry = false;
   /** Cursor: distance from the top of the current page. */
   y = PAGE.margin;
   readonly left = PAGE.margin;
@@ -62,6 +64,18 @@ export class Layout {
     this.page.drawRectangle({ x: 0, y: 0, width: PAGE.width, height: PAGE.height, color: COLORS.canvas });
     this.pages.push(this.page);
     this.y = PAGE.margin;
+  }
+
+  /** The height `draw` would take, without drawing anything. `draw` returns the height it used. */
+  measure(draw: () => number): number {
+    const [dry, y] = [this.dry, this.y];
+    this.dry = true;
+    try {
+      return draw();
+    } finally {
+      this.dry = dry;
+      this.y = y;
+    }
   }
 
   /** Starts a new page unless `height` still fits above the footer. */
@@ -120,6 +134,7 @@ export class Layout {
   text(text: string, x: number, top: number, style: TextStyle, maxWidth = this.width): number {
     const lines = this.wrap(text, style, maxWidth);
     const lh = this.lineHeight(style);
+    if (this.dry) return lines.length * lh;
     lines.forEach((line, i) => {
       this.page.drawText(line, {
         x,
@@ -138,6 +153,7 @@ export class Layout {
   }
 
   roundedRect(x: number, top: number, width: number, height: number, radius: number, fill: RGB, stroke?: RGB): void {
+    if (this.dry) return;
     const r = Math.min(radius, width / 2, height / 2);
     const w = width;
     const h = height;
@@ -155,41 +171,34 @@ export class Layout {
     this.roundedRect(x, top, width, height, 10, COLORS.surface, COLORS.border);
   }
 
-  /** A small rounded label; returns its width. */
-  pill(text: string, x: number, top: number, fill: RGB, color: RGB, size = 7.5): number {
-    const style: TextStyle = { size, font: 'bold', color };
+  /** A grey chip with a hairline border, like the reference's “App” tag; returns its width. */
+  chip(text: string, x: number, top: number, size = 7.5): number {
+    const style: TextStyle = { size, color: COLORS.textSecondary };
     const width = this.textWidth(text, style) + 10;
-    this.roundedRect(x, top, width, size + 6, 4, fill);
-    this.text(text, x + 5, top + 3, style, Number.MAX_SAFE_INTEGER);
+    this.roundedRect(x, top, width, size + 7, 4, COLORS.sunken, COLORS.border);
+    this.text(text, x + 5, top + 3.5, style, Number.MAX_SAFE_INTEGER);
     return width;
   }
 
-  /** A thin progress bar. */
-  bar(x: number, top: number, width: number, value: number, color: RGB): void {
-    this.roundedRect(x, top, width, 4, 2, COLORS.sunken);
-    const filled = Math.max(0, Math.min(1, value)) * width;
-    if (filled > 0) this.roundedRect(x, top, Math.max(filled, 4), 4, 2, color);
+  /** A status dot followed by its label, like the reference's “● Production”; returns its width. */
+  status(label: string, color: RGB, x: number, top: number, size = 8): number {
+    if (!this.dry) this.page.drawCircle({ x: x + 2.5, y: PAGE.height - top - size * 0.55, size: 2.5, color });
+    this.text(label, x + 9, top, { size, color: COLORS.textSecondary }, Number.MAX_SAFE_INTEGER);
+    return 9 + this.textWidth(label, { size });
+  }
+
+  /** A colour sample. */
+  swatch(color: RGB, x: number, top: number, size: number): void {
+    this.roundedRect(x, top, size, size, 4, color, COLORS.border);
   }
 
   rule(top: number, x = this.left + 14, width = this.width - 28): void {
+    if (this.dry) return;
     this.page.drawLine({
       start: { x, y: PAGE.height - top },
       end: { x: x + width, y: PAGE.height - top },
       thickness: 0.5,
       color: COLORS.border,
-    });
-  }
-
-  /** The brand mark: a squiggle on a magenta tile. */
-  logo(x: number, top: number, size: number): void {
-    this.roundedRect(x, top, size, size, size * 0.29, COLORS.accent);
-    const s = size / 24;
-    this.page.drawSvgPath(`M ${6 * s} ${14.5 * s} C ${7.5 * s} ${11.5 * s} ${9 * s} ${11.5 * s} ${10.5 * s} ${14.5 * s} S ${13.5 * s} ${17.5 * s} ${15 * s} ${14.5 * s} S ${17.2 * s} ${11.9 * s} ${18 * s} ${13.5 * s}`, {
-      x,
-      y: PAGE.height - top,
-      borderColor: COLORS.white,
-      borderWidth: 2.2 * s,
-      borderLineCap: 1,
     });
   }
 }

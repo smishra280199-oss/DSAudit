@@ -3,7 +3,12 @@ import { cx } from './cx';
 
 export type Tone = 'neutral' | 'accent' | 'danger' | 'warning' | 'success' | 'info';
 
-export function Badge({ tone = 'neutral', dot, children }: { tone?: Tone; dot?: boolean; children: ReactNode }) {
+/**
+ * A grey chip, like the reference's “App” tag. Status tones add a coloured dot
+ * (like “● Production”) rather than tinting the chip; accent colours the text.
+ */
+export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
+  const dot = tone !== 'neutral' && tone !== 'accent';
   return (
     <span className={cx('ui-badge', tone !== 'neutral' && `ui-badge--${tone}`)}>
       {dot && <span className="ui-dot" />}

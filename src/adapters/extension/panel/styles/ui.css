@@ -462,32 +462,22 @@ textarea {
 }
 
 .ui-badge--accent {
-  background: var(--accent-soft);
-  box-shadow: none;
   color: var(--accent-text);
 }
 
-.ui-badge--danger {
-  background: var(--danger-soft);
-  box-shadow: none;
+.ui-badge--danger .ui-dot {
   color: var(--danger);
 }
 
-.ui-badge--warning {
-  background: var(--warning-soft);
-  box-shadow: none;
+.ui-badge--warning .ui-dot {
   color: var(--warning);
 }
 
-.ui-badge--success {
-  background: var(--success-soft);
-  box-shadow: none;
+.ui-badge--success .ui-dot {
   color: var(--success);
 }
 
-.ui-badge--info {
-  background: var(--info-soft);
-  box-shadow: none;
+.ui-badge--info .ui-dot {
   color: var(--info);
 }
 
@@ -514,24 +504,8 @@ textarea {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: inherit;
-  background: var(--text);
+  background: var(--text-tertiary);
   transition: width var(--duration-base) var(--ease);
-}
-
-.ui-meter--good .ui-meter__fill {
-  background: var(--success);
-}
-
-.ui-meter--fair .ui-meter__fill {
-  background: var(--warning);
-}
-
-.ui-meter--poor .ui-meter__fill {
-  background: var(--danger);
-}
-
-.ui-meter--accent .ui-meter__fill {
-  background: linear-gradient(90deg, var(--accent-top), var(--accent-bottom));
 }
 
 /* ── Tooltip ────────────────────────────────────────────── */

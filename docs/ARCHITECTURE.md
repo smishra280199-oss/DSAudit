@@ -48,16 +48,27 @@ Nothing is injected in advance: the manifest declares no content scripts.
 - **Confidence**: everything the capture could not see.
 - **Opportunities**: one rule per concern, ranked by severity, each with rough effort hours.
 
+## Multi-page audits
+
+Each page is captured and saved as its own snapshot. The Pages view keeps an ordered list of them (`collection:pages` in storage). **Audit N pages** loads them and calls `mergeSnapshots()` (`src/audit/merge.ts`), which produces one ordinary `PageSnapshot`:
+
+- **Elements:** concatenated, with page-scoped selectors (`"1::.btn"`, see `shared/page-scope.ts`).
+- **Shared CSS:** de-duplicated.
+- **Interaction counts:** summed.
+- **Pages list:** kept on `snapshot.pages`.
+
+Inference, scoring and reports then run unchanged. Findings use the page scope to say *where* something was seen, and the controller filters highlight selectors to the page that is open.
+
 ## From findings to a client report
 
 ```
-analysis ─▶ savings.consolidationLines()   one line per style family: in use, needed, excess, hours and cost per year
-         ─▶ estimateSavings()              + re-theme cost (hard-coded edits today vs distinct values as tokens) + cleanup
-audit    ─▶ insights.summarise()           headline, KPIs, consolidation table, top 3 priorities, area health, phased plan
-         ─▶ report/pdf | html | markdown   three renderers of the same ExecutiveSummary, white-labelled via ReportBranding
+analysis ─▶ savings          one line per style family (in use, needed, excess, yearly cost) + re-theme cost
+audit    ─▶ insights/findings.ts   pain points: their own elements, colours and pages as evidence
+         ─▶ insights/index.ts      personal intro, hook, headline numbers, stock-take, glossary
+         ─▶ report/pdf | html | markdown   three renderers of the same ExecutiveSummary
 ```
 
-Every money figure traces back to a line item, so a client can ask "where does $8,602 come from?" and get an answer. Business wording lives in `insights/narrative.ts`, separate from the calculations, so the copy can be tuned without touching the maths. The PDF is drawn as vector pages with pdf-lib (`report/pdf/layout.ts` is a small top-down layout engine) in the panel's visual language, using the colours in `report/pdf/theme.ts`, which mirror `tokens.css`.
+The report deliberately contains only the client's problems and what they cost: no cleanup estimates, no prices. Every money figure traces back to a stock-take line. The wording lives in `insights/` next to the data it describes. `insights/describe.ts` turns elements into things a reader recognises: "the “Upgrade plan” button on /pricing", "a purple". The PDF uses only patterns from the reference boards: title and subtitle headings, white hairline cards, grey table header bands, grey chips, and status shown as a coloured dot.
 
 ## Testing
 

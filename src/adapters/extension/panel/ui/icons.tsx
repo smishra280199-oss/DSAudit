@@ -233,3 +233,16 @@ export const FileIcon = (p: IconProps) => (
     <path d="M9 2.5v3h3M5.5 9h5M5.5 11.5h3" />
   </Icon>
 );
+
+export const PagesIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="4.5" y="2.5" width="9" height="11" rx="1.5" />
+    <path d="M2.5 5v7.5a1.5 1.5 0 0 0 1.5 1.5h6.5" />
+  </Icon>
+);
+
+export const PlusIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M8 3v10M3 8h10" />
+  </Icon>
+);

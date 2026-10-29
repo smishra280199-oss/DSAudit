@@ -9,7 +9,7 @@ import { NavigationContext, type FoundationSegment, type Navigation, type ViewKe
 import { useAuditState, useController } from './use-audit';
 import { ComponentsView } from './views/ComponentsView';
 import { FoundationsView } from './views/FoundationsView';
-import { HistoryView } from './views/HistoryView';
+import { PagesView } from './views/PagesView';
 import { InspectView } from './views/InspectView';
 import { OpportunitiesView } from './views/OpportunitiesView';
 import { OverviewView } from './views/OverviewView';
@@ -20,7 +20,7 @@ const VIEWS: Record<ViewKey, { render: () => ReactNode; needsAudit: boolean }> =
   components: { render: () => <ComponentsView />, needsAudit: true },
   opportunities: { render: () => <OpportunitiesView />, needsAudit: true },
   inspect: { render: () => <InspectView />, needsAudit: false },
-  history: { render: () => <HistoryView />, needsAudit: false },
+  pages: { render: () => <PagesView />, needsAudit: false },
 };
 
 function isTyping(target: EventTarget | null): boolean {
@@ -29,7 +29,7 @@ function isTyping(target: EventTarget | null): boolean {
 
 export function App() {
   const controller = useController();
-  const { ready, toast, audit, dismissed } = useAuditState();
+  const { ready, toast } = useAuditState();
   const [view, setView] = useState<ViewKey>('overview');
   const [foundation, setFoundation] = useState<FoundationSegment>('color');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -69,7 +69,6 @@ export function App() {
 
   if (!ready) return null;
   const current = VIEWS[view];
-  const openOpportunities = audit ? audit.analysis.opportunities.filter((o) => !dismissed.includes(o.id)).length : 0;
 
   return (
     <NavigationContext.Provider value={navigation}>
@@ -78,7 +77,7 @@ export function App() {
         <main className="panel__content" id="main">
           {current.needsAudit ? <CaptureGate>{current.render()}</CaptureGate> : current.render()}
         </main>
-        <TabBar badge={{ opportunities: openOpportunities }} />
+        <TabBar />
         <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
         <ReportDetailsDialog open={detailsOpen} onClose={() => setDetailsOpen(false)} />
         {toast && <Toast message={toast} />}

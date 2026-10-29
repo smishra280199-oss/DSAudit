@@ -1,15 +1,21 @@
 /**
- * The client-facing PDF report. Written for a VP of Design or Product who
- * gives it two minutes: page 1 answers "what is this costing us and what
- * would fixing it return?", page 2 "where do we stand and where do we
- * start?", and the rest is the plan, the evidence and the method.
+ * The client-facing PDF: a guided, plain-language walk through the reader's
+ * own product. It opens with a personal note and the one thing they likely
+ * didn't know, then what inconsistency is costing them, then each problem
+ * (where it shows up, why it matters, what we'd suggest), a stock-take of
+ * their design system, a glossary and a short, low-key note on how we can help.
+ *
+ * Visual language: the reference boards only. Grey canvas, white hairline
+ * cards, title-and-subtitle headings, sentence-case table headers on a grey
+ * band, grey chips, and status shown as a coloured dot beside its label.
  */
 
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts, type RGB } from 'pdf-lib';
 import type { Audit } from '../../audit';
-import { summarise, STATUS_LABELS, type ExecutiveSummary, type HealthStatus } from '../../insights';
+import { STATUS_LABELS, summarise, type Evidence, type ExecutiveSummary, type HealthStatus, type PainPoint } from '../../insights';
 import type { Severity } from '../../inference/types';
 import { formatMoney, formatMoneyShort } from '../../savings';
+import { parseColor } from '../../shared/color';
 import type { ClientReportOptions } from '../branding';
 import { formatDate } from '../format';
 import { Layout, type TextStyle } from './layout';
@@ -23,74 +29,102 @@ interface Context {
 }
 
 const PAD = 16;
+const body: TextStyle = { size: TYPE.body, color: COLORS.text, lineHeight: 13.5 };
+const secondary: TextStyle = { size: TYPE.body, color: COLORS.textSecondary, lineHeight: 13.5 };
+const small: TextStyle = { size: TYPE.small, color: COLORS.textSecondary, lineHeight: 11.5 };
+const label: TextStyle = { size: TYPE.small, font: 'bold', color: COLORS.text };
 
-const STATUS_TONE: Record<HealthStatus, { fill: typeof COLORS.text; text: typeof COLORS.text; bar: typeof COLORS.text }> = {
-  strong: { fill: COLORS.successSoft, text: COLORS.success, bar: COLORS.success },
-  'needs-work': { fill: COLORS.warningSoft, text: COLORS.warning, bar: COLORS.warning },
-  'at-risk': { fill: COLORS.dangerSoft, text: COLORS.danger, bar: COLORS.danger },
+const STATUS_COLOR: Record<HealthStatus, RGB> = { strong: COLORS.success, 'needs-work': COLORS.warning, 'at-risk': COLORS.danger };
+const PRIORITY: Record<Severity, { label: string; color: RGB }> = {
+  high: { label: 'High priority', color: COLORS.danger },
+  medium: { label: 'Worth fixing', color: COLORS.warning },
+  low: { label: 'Nice to have', color: COLORS.textTertiary },
 };
 
-const SEVERITY_TONE: Record<Severity, { fill: typeof COLORS.text; text: typeof COLORS.text }> = {
-  high: { fill: COLORS.dangerSoft, text: COLORS.danger },
-  medium: { fill: COLORS.warningSoft, text: COLORS.warning },
-  low: { fill: COLORS.sunken, text: COLORS.textSecondary },
-};
-
-const body: TextStyle = { size: TYPE.body, color: COLORS.textSecondary };
-const small: TextStyle = { size: TYPE.small, color: COLORS.textSecondary };
-
-/** Section heading outside cards: a title and an optional one-line lede. */
-function sectionTitle(l: Layout, title: string, lede?: string): void {
-  l.ensure(60);
-  l.y += l.text(title, l.left, l.y, { size: TYPE.title, font: 'bold' });
-  if (lede) l.y += 2 + l.text(lede, l.left, l.y + 2, small);
-  l.gap(10);
+function colour(value: string): RGB {
+  const c = parseColor(value);
+  return c ? rgb(c.r / 255, c.g / 255, c.b / 255) : COLORS.sunken;
 }
 
-// ── Page 1: cover and the money ─────────────────────────────────────────
+function headingHeight(l: Layout, title: string, subtitle?: string): number {
+  return l.textHeight(title, { size: TYPE.title, font: 'bold' }, l.width) + (subtitle ? 4 + l.textHeight(subtitle, secondary, l.width) : 0) + 12;
+}
+
+/**
+ * Title with a grey subtitle underneath, as in the reference page headers.
+ * `keepWith` is the height of what follows, so a heading never ends a page alone.
+ */
+function heading(l: Layout, title: string, subtitle?: string, keepWith = 80): void {
+  l.ensure(headingHeight(l, title, subtitle) + keepWith);
+  l.y += l.text(title, l.left, l.y, { size: TYPE.title, font: 'bold' });
+  if (subtitle) l.y += 4 + l.text(subtitle, l.left, l.y + 4, secondary);
+  l.gap(12);
+}
+
+/** A heading kept on the same page as the card that follows it. */
+function section(l: Layout, title: string, subtitle: string | undefined, content: (top: number) => number, gapAfter = 18): void {
+  heading(l, title, subtitle, l.measure(() => content(0)) + PAD * 2);
+  card(l, content, gapAfter);
+}
+
+/** Draws a white card sized to its content. `content` draws from `top` and returns the height it used. */
+function card(l: Layout, content: (top: number) => number, gapAfter = 10): void {
+  const height = l.measure(() => content(l.y)) + PAD * 2;
+  l.ensure(height);
+  const top = l.y;
+  l.card(l.left, top, l.width, height);
+  content(top + PAD);
+  l.y = top + height + gapAfter;
+}
+
+// ── Page 1: hello, the hook, the numbers ─────────────────────────────────
 
 async function cover(l: Layout, { audit, summary, options }: Context): Promise<void> {
   const { snapshot } = audit;
-  const { branding, clientName } = options;
+  const { branding } = options;
 
-  l.logo(l.left, l.y, 20);
-  l.text(branding.agencyName || 'System Audit', l.left + 28, l.y + 4, { size: 10.5, font: 'bold' });
-  l.textRight(formatDate(snapshot.capturedAt), l.left + l.width, l.y + 5, { size: TYPE.small, color: COLORS.textSecondary });
-  l.gap(46);
+  if (branding.agencyName) l.text(branding.agencyName, l.left, l.y, { size: 10.5, font: 'bold' });
+  l.textRight(formatDate(snapshot.capturedAt), l.left + l.width, l.y + 1, { size: TYPE.small, color: COLORS.textSecondary });
+  l.gap(40);
 
   const shot = snapshot.screenshot ? await embedScreenshot(l, snapshot.screenshot) : null;
   const shotWidth = shot ? 196 : 0;
-  const titleWidth = l.width - (shot ? shotWidth + 20 : 0);
-  const titleTop = l.y;
-
-  let y = titleTop;
-  y += l.text('DESIGN SYSTEM AUDIT', l.left, y, { size: TYPE.small, font: 'bold', color: COLORS.accentText });
-  y += 6 + l.text(clientName, l.left, y + 6, { size: TYPE.display, font: 'bold', lineHeight: 30 }, titleWidth);
-  y += 4 + l.text(snapshot.url, l.left, y + 4, { size: TYPE.small, color: COLORS.textTertiary }, titleWidth);
-  const preparedBy = [branding.preparedBy, branding.agencyName].filter(Boolean).join(', ');
-  if (preparedBy) y += 10 + l.text(`Prepared for ${clientName} by ${preparedBy}`, l.left, y + 10, body, titleWidth);
+  const textWidth = l.width - (shot ? shotWidth + 24 : 0);
+  const top = l.y;
+  let y = top;
+  y += l.text(summary.clientName, l.left, y, { size: TYPE.display, font: 'bold', lineHeight: 30 }, textWidth);
+  const pages = summary.pages.length === 1 ? '1 page reviewed' : `${summary.pages.length} pages reviewed`;
+  y += 4 + l.text(`Design system audit · ${pages}`, l.left, y + 4, secondary, textWidth);
+  y += 2 + l.text(snapshot.url, l.left, y + 2, { size: TYPE.small, color: COLORS.textTertiary }, textWidth);
 
   if (shot) {
-    const h = Math.min(130, (shotWidth * shot.height) / shot.width);
+    const h = Math.min(124, (shotWidth * shot.height) / shot.width);
     const w = (h * shot.width) / shot.height;
     const x = l.left + l.width - shotWidth;
-    l.roundedRect(x, titleTop, shotWidth, h + 12, 8, COLORS.surface, COLORS.border);
-    l.page.drawImage(shot, { x: x + (shotWidth - w) / 2, y: PAGE.height - titleTop - 6 - h, width: w, height: h });
-    y = Math.max(y, titleTop + h + 12);
+    l.roundedRect(x, top, shotWidth, h + 12, 8, COLORS.surface, COLORS.border);
+    l.page.drawImage(shot, { x: x + (shotWidth - w) / 2, y: PAGE.height - top - 6 - h, width: w, height: h });
+    y = Math.max(y, top + h + 12);
   }
-  l.y = y + 22;
+  l.y = y + 20;
 
-  // The headline: one sentence about money, then the return on fixing it.
-  const textWidth = l.width - PAD * 2 - 6;
-  const headlineStyle: TextStyle = { size: TYPE.headline, font: 'bold', lineHeight: 21 };
-  const subStyle: TextStyle = { size: 10, color: COLORS.textSecondary, lineHeight: 14 };
-  const height = PAD * 2 + l.textHeight(summary.headline, headlineStyle, textWidth) + 8 + l.textHeight(summary.subheadline, subStyle, textWidth);
-  l.card(l.left, l.y, l.width, height);
-  l.roundedRect(l.left, l.y + 14, 3, height - 28, 1.5, COLORS.accent);
-  let ty = l.y + PAD;
-  ty += l.text(summary.headline, l.left + PAD + 6, ty, headlineStyle, textWidth);
-  l.text(summary.subheadline, l.left + PAD + 6, ty + 8, subStyle, textWidth);
-  l.y += height + 12;
+  // A personal note: who is writing, and what this document is.
+  const signature = [branding.preparedBy, branding.agencyName].filter(Boolean).join(', ');
+  const greeting = `Hi ${summary.clientName === 'your product' ? 'there' : `${summary.clientName} team`},`;
+  card(l, (t) => {
+    let h = l.text(greeting, l.left + PAD, t, { ...body, font: 'bold' }, l.width - PAD * 2);
+    h += 6 + l.text(summary.intro, l.left + PAD, t + h + 6, body, l.width - PAD * 2);
+    if (branding.note.trim()) h += 6 + l.text(branding.note.trim(), l.left + PAD, t + h + 6, body, l.width - PAD * 2);
+    if (signature) h += 8 + l.text(signature, l.left + PAD, t + h + 8, secondary, l.width - PAD * 2);
+    return h;
+  });
+
+  if (summary.hook) {
+    card(l, (t) => {
+      let h = l.text('Something you may not know', l.left + PAD, t, { size: 11, font: 'bold' }, l.width - PAD * 2);
+      h += 4 + l.text(summary.hook!, l.left + PAD, t + h + 4, body, l.width - PAD * 2);
+      return h;
+    });
+  }
 }
 
 async function embedScreenshot(l: Layout, dataUrl: string) {
@@ -102,248 +136,290 @@ async function embedScreenshot(l: Layout, dataUrl: string) {
   }
 }
 
-function kpis(l: Layout, { audit, summary }: Context): void {
-  const { savings, assumptions } = audit;
-  const short = (n: number) => formatMoneyShort(n, assumptions.currency);
+function numbers(l: Layout, { audit, summary }: Context): void {
+  const short = (n: number) => formatMoneyShort(n, audit.assumptions.currency);
+  const n = summary.numbers;
+  heading(l, summary.headline, summary.subheadline);
   const tiles = [
-    { value: short(savings.annualDragCost), label: 'Yearly cost of design inconsistency', color: COLORS.danger },
-    { value: short(savings.annualSavings), label: 'Recoverable every year after cleanup', color: COLORS.success },
-    { value: short(savings.cleanupCost), label: `One-time cleanup, ${summary.cleanupDuration}`, color: COLORS.text },
-    { value: `${summary.score}/100`, label: `Design system maturity: ${summary.grade}, ${summary.maturity}`, color: COLORS.accentText },
+    { value: short(n.yearlyCost), caption: 'Estimated yearly cost of inconsistency' },
+    { value: short(n.recoverable), caption: 'Could be saved every year' },
+    { value: `${n.hoursLost}h`, caption: 'Team hours lost each year' },
+    { value: `${summary.score}/100`, caption: 'Consistency score (75+ is healthy)' },
   ];
   const gap = 8;
   const w = (l.width - gap * 3) / 4;
-  const h = 70;
+  const h = 62;
+  l.ensure(h);
   tiles.forEach((tile, i) => {
     const x = l.left + i * (w + gap);
     l.card(x, l.y, w, h);
-    l.text(tile.value, x + 12, l.y + 12, { size: 17, font: 'bold', color: tile.color }, w - 24);
-    l.text(tile.label, x + 12, l.y + 38, { size: TYPE.tiny, color: COLORS.textSecondary, lineHeight: 10 }, w - 24);
+    l.text(tile.value, x + 12, l.y + 12, { size: 17, font: 'bold' }, w - 24);
+    l.text(tile.caption, x + 12, l.y + 36, { size: TYPE.tiny, color: COLORS.textSecondary, lineHeight: 10 }, w - 24);
   });
-  l.y += h + 12;
+  l.y += h + 8;
+  l.y += l.text(summary.scoreExplainer, l.left, l.y, small) + 16;
 }
 
-function consolidation(l: Layout, { audit, summary, money }: Context, limit: number): void {
-  const rows = summary.consolidation.slice(0, limit);
-  const { retheme } = audit.savings;
-  const rowH = 22;
-  const rethemeText =
-    retheme.literals > 0
-      ? `Rebrand or dark-mode effort: today ${retheme.literals.toLocaleString('en-US')} hard-coded values must each be found and edited (~${retheme.hoursToday}h per change). As tokens, that is ${retheme.distinctValues.toLocaleString('en-US')} edits in one place (~${retheme.hoursWithTokens}h).`
-      : '';
-  const rethemeH = rethemeText ? l.textHeight(rethemeText, small, l.width - PAD * 2) + 14 : 0;
-  const height = PAD + 34 + 18 + Math.max(1, rows.length) * rowH + (rows.length ? rowH + 8 : 0) + rethemeH + PAD - 6;
-  l.ensure(height);
+// ── The problems, one card each ──────────────────────────────────────────
+
+function evidence(l: Layout, e: Evidence, x: number, top: number, width: number): number {
+  switch (e.kind) {
+    case 'colours': {
+      let y = top;
+      for (const group of e.groups) {
+        let cx = x;
+        for (const value of [group.main, ...group.copies]) {
+          l.swatch(colour(value), cx, y, 16);
+          l.text(value, cx + 21, y + 4, { size: TYPE.small, color: COLORS.textSecondary }, 80);
+          cx += 84;
+          if (cx > x + width - 84) break;
+        }
+        y += 22;
+      }
+      return y - top;
+    }
+    case 'values': {
+      let cx = x;
+      let y = top;
+      for (const item of e.items) {
+        const text = `${item.value} ×${item.count}`;
+        const w = l.textWidth(text, { size: 7.5 }) + 10;
+        if (cx + w > x + width) {
+          cx = x;
+          y += 18;
+        }
+        if (item.flagged) l.roundedRect(cx - 1, y - 1, w + 2, 16.5, 5, COLORS.surface, COLORS.danger);
+        l.chip(text, cx, y);
+        cx += w + 6;
+      }
+      y += 20;
+      return y - top + l.text(e.note, x, y, small, width);
+    }
+    case 'contrast': {
+      let y = top;
+      for (const item of e.items) {
+        l.roundedRect(x, y, 30, 18, 4, colour(item.background), COLORS.border);
+        l.text('Aa', x + 8, y + 4.5, { size: 8.5, font: 'bold', color: colour(item.foreground) });
+        l.text(`“${item.text}”`, x + 40, y + 1, { size: TYPE.small, color: COLORS.text }, width - 140);
+        l.textRight(`${item.ratio} : 1 (needs 4.5)`, x + width, y + 1, { size: TYPE.small, color: COLORS.textSecondary });
+        l.text(`${item.foreground} on ${item.background}`, x + 40, y + 10, { size: TYPE.tiny, color: COLORS.textTertiary }, width - 140);
+        y += 24;
+      }
+      return y - top;
+    }
+    case 'variants': {
+      let y = top;
+      e.items.forEach((item, i) => {
+        if (i > 0) l.rule(y - 3, x, width);
+        l.text(item.label, x, y + 2, { size: TYPE.small, font: 'bold' }, 150);
+        l.text(item.details, x + 160, y + 2, { size: TYPE.small, color: COLORS.textSecondary }, width - 160);
+        y += 17;
+      });
+      return y - top;
+    }
+    case 'none':
+      return 0;
+  }
+}
+
+function painPoint(l: Layout, p: PainPoint, index: number, money: (n: number) => string): void {
+  const inner = l.width - PAD * 2;
+  const x = l.left + PAD;
+  const priority = PRIORITY[p.severity];
+  const meta = [
+    p.pages.length ? `Seen on ${p.pages.slice(0, 4).join(', ')}` : '',
+    p.annualCost ? `about ${money(p.annualCost)} a year` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  // Header and body share a card; the suggestion sits in a grey footer band, like the reference dialogs.
+  const content = (top: number): number => {
+    const statusWidth = l.measure(() => l.status(priority.label, priority.color, 0, 0));
+    let y = top;
+    y += l.text(`${index}. ${p.title}`, x, y, { size: 11, font: 'bold', lineHeight: 14 }, inner - statusWidth - 12);
+    l.status(priority.label, priority.color, x + inner - statusWidth, top + 2);
+    if (meta) y += 2 + l.text(meta, x, y + 2, small, inner);
+    y += 8 + l.text(p.story, x, y + 8, body, inner);
+
+    const ev = l.measure(() => evidence(l, p.evidence, x, 0, inner));
+    if (ev > 0) y += 10 + evidence(l, p.evidence, x, y + 10, inner);
+
+    if (p.where.length) {
+      y += 10 + l.text('Where we saw it', x, y + 10, label, inner);
+      y += 3 + l.text(p.where.map((w) => `• ${w.charAt(0).toUpperCase()}${w.slice(1)}`).join('\n'), x, y + 3, secondary, inner);
+    }
+    y += 10 + l.text('Why it matters', x, y + 10, label, inner);
+    y += 3 + l.text(p.why, x, y + 3, secondary, inner);
+    return y - top;
+  };
+  const footer = (top: number): number => {
+    let h = l.text('What we’d suggest', x, top, label, inner);
+    h += 3 + l.text(p.suggestion, x, top + h + 3, body, inner);
+    return h;
+  };
+
+  const bodyH = l.measure(() => content(0)) + PAD * 2;
+  const footH = l.measure(() => footer(0)) + 24;
+  l.ensure(bodyH + footH);
   const top = l.y;
-  l.card(l.left, top, l.width, height);
-  l.text('What you have vs. what you need', l.left + PAD, top + PAD, { size: 11, font: 'bold' });
-  l.text('Redundant styles and variants in use today, the leaner set a design system needs, and what the excess costs each year.', l.left + PAD, top + PAD + 15, small, l.width - PAD * 2);
-
-  const col = { label: l.left + PAD, current: l.left + 220, needed: l.left + 290, bar: l.left + 310, cost: l.left + l.width - PAD };
-  let y = top + PAD + 42;
-  const head: TextStyle = { size: TYPE.tiny, font: 'bold', color: COLORS.textTertiary };
-  l.text('STYLE', col.label, y, head);
-  l.textRight('IN USE', col.current, y, head);
-  l.textRight('NEEDED', col.needed, y, head);
-  l.text('REDUCTION', col.bar, y, head);
-  l.textRight('COST / YEAR', col.cost, y, head);
-  y += 14;
-
-  if (rows.length === 0) {
-    l.text('No redundant values found. Every style family is within a healthy range.', col.label, y + 6, body);
-    y += rowH;
-  }
-  for (const row of rows) {
-    l.rule(y);
-    const mid = y + 7;
-    l.text(row.label, col.label, mid, { size: TYPE.body, font: 'bold' });
-    l.textRight(String(row.current), col.current, mid, { size: TYPE.body });
-    l.textRight(String(row.recommended), col.needed, mid, { size: TYPE.body, font: 'bold', color: COLORS.success });
-    const reduction = row.current ? row.excess / row.current : 0;
-    l.bar(col.bar, mid + 3, 90, reduction, COLORS.accent);
-    l.text(`-${Math.round(reduction * 100)}%`, col.bar + 96, mid, { size: TYPE.small, color: COLORS.textSecondary });
-    l.textRight(money(row.annualCost), col.cost, mid, { size: TYPE.body });
-    y += rowH;
-  }
-  if (rows.length) {
-    l.rule(y);
-    const totals = summary.consolidationTotals;
-    const cost = summary.consolidation.reduce((n, r) => n + r.annualCost, 0);
-    l.text('Total', col.label, y + 8, { size: TYPE.body, font: 'bold' });
-    l.textRight(String(totals.current), col.current, y + 8, { size: TYPE.body, font: 'bold' });
-    l.textRight(String(totals.recommended), col.needed, y + 8, { size: TYPE.body, font: 'bold', color: COLORS.success });
-    l.text(`${totals.reduction}% fewer styles overall`, col.bar, y + 8, { size: TYPE.small, color: COLORS.textSecondary }, 150);
-    l.textRight(money(cost), col.cost, y + 8, { size: TYPE.body, font: 'bold' });
-    y += rowH + 8;
-  }
-  if (rethemeText) {
-    l.roundedRect(l.left + PAD - 6, y, l.width - PAD * 2 + 12, rethemeH - 4, 6, COLORS.sunken);
-    l.text(rethemeText, l.left + PAD, y + 5, small, l.width - PAD * 2);
-  }
-  l.y = top + height + 12;
+  l.card(l.left, top, l.width, bodyH + footH);
+  l.roundedRect(l.left + 0.75, top + bodyH, l.width - 1.5, footH - 0.75, 9, COLORS.canvas);
+  l.roundedRect(l.left + 0.75, top + bodyH, l.width - 1.5, 10, 0, COLORS.canvas);
+  l.rule(top + bodyH, l.left, l.width);
+  content(top + PAD);
+  footer(top + bodyH + 12);
+  l.y = top + bodyH + footH + 10;
 }
 
-// ── Page 2: where you stand and where to start ──────────────────────────
-
-function areaHealth(l: Layout, { summary }: Context): void {
-  sectionTitle(l, 'Where you stand', `Overall ${summary.score}/100 (${summary.grade}, ${summary.maturity}). Each area is scored 0 to 100 from what the product actually renders.`);
-  const impactWidth = l.width - PAD * 2 - 190;
-  const rows = summary.areas.map((a) => ({ area: a, h: Math.max(33, l.textHeight(a.impact, small, impactWidth) + 14) }));
-  const height = PAD + rows.reduce((n, r) => n + r.h, 0) + PAD - 6;
-  l.ensure(height);
-  const top = l.y;
-  l.card(l.left, top, l.width, height);
-  let y = top + PAD - 4;
-  rows.forEach(({ area, h }, i) => {
-    if (i > 0) l.rule(y);
-    const tone = STATUS_TONE[area.status];
-    l.text(area.label, l.left + PAD, y + 9, { size: TYPE.body, font: 'bold' });
-    l.pill(STATUS_LABELS[area.status], l.left + PAD + 100, y + 8, tone.fill, tone.text);
-    l.bar(l.left + PAD + 100, y + 25, 56, area.score / 100, tone.bar);
-    l.text(String(area.score), l.left + PAD + 162, y + 22, { size: TYPE.tiny, color: COLORS.textSecondary });
-    l.text(area.impact, l.left + PAD + 190, y + 9, small, impactWidth);
-    y += h;
-  });
-  l.y = top + height + 12;
-}
-
-function facts(l: Layout, { summary }: Context): void {
-  const gap = 8;
-  const w = (l.width - gap * 3) / 4;
-  const h = 52;
-  l.ensure(h);
-  summary.facts.forEach((fact, i) => {
-    const x = l.left + i * (w + gap);
-    l.card(x, l.y, w, h);
-    l.text(fact.value, x + 12, l.y + 10, { size: 15, font: 'bold' }, w - 24);
-    l.text(fact.label, x + 12, l.y + 31, { size: TYPE.tiny, color: COLORS.textSecondary, lineHeight: 10 }, w - 24);
-  });
-  l.y += h + 18;
-}
-
-function priorities(l: Layout, { summary }: Context): void {
-  if (summary.priorities.length === 0) return;
-  sectionTitle(l, 'Where to start', 'The three changes with the most impact for the effort, in order.');
-  const textWidth = l.width - PAD * 2 - 34;
-  summary.priorities.forEach((p, i) => {
-    const fix = `How: ${p.fix}`;
-    const h = PAD * 2 + l.textHeight(p.title, { size: 10.5, font: 'bold' }, textWidth - 60) + 4 + l.textHeight(p.why, body, textWidth) + 4 + l.textHeight(fix, small, textWidth);
-    l.ensure(h);
-    const top = l.y;
-    l.card(l.left, top, l.width, h);
-    l.roundedRect(l.left + PAD, top + PAD - 2, 20, 20, 10, COLORS.accentSoft);
-    l.text(String(i + 1), l.left + PAD + (i === 0 ? 7.5 : 7), top + PAD + 3, { size: 10, font: 'bold', color: COLORS.accentText });
-    const x = l.left + PAD + 34;
-    let y = top + PAD;
-    y += l.text(p.title, x, y, { size: 10.5, font: 'bold' }, textWidth - 60);
-    y += 4 + l.text(p.why, x, y + 4, body, textWidth);
-    l.text(fix, x, y + 4, small, textWidth);
-    const tone = SEVERITY_TONE[p.severity];
-    const effort = `~${p.effortHours}h`;
-    l.pill(effort, l.left + l.width - PAD - l.textWidth(effort, { size: 7.5, font: 'bold' }) - 10, top + PAD - 1, tone.fill, tone.text);
-    l.y = top + h + 6;
-  });
-  l.gap(12);
-}
-
-// ── Page 3: the plan and how we help ────────────────────────────────────
-
-function plan(l: Layout, { summary, money, audit }: Context): void {
-  if (summary.plan.length === 0) return;
+function painPoints(l: Layout, { summary, money }: Context): void {
+  if (summary.painPoints.length === 0) return;
   l.addPage();
-  sectionTitle(l, 'Recommended plan', 'Three phases, each shippable on its own. Timelines assume one person on the work; a pair halves them.');
-  const textWidth = l.width - PAD * 2 - 130;
-  summary.plan.forEach((phase, i) => {
-    const items = phase.items.slice(0, 4).map((t) => `• ${t}`);
-    if (phase.items.length > 4) items.push(`• and ${phase.items.length - 4} more`);
-    const itemsText = items.join('\n');
-    const h = PAD * 2 + 12 + l.textHeight(phase.name, { size: 11, font: 'bold' }, textWidth) + 3 + l.textHeight(phase.outcome, body, textWidth) + 8 + l.textHeight(itemsText, small, textWidth);
-    l.ensure(h);
+  heading(
+    l,
+    'What we found',
+    'The problems we noticed, most important first. For each one we show where it appears, why it matters and what we would do about it.',
+  );
+  summary.painPoints.forEach((p, i) => painPoint(l, p, i + 1, money));
+  l.gap(8);
+}
+
+// ── Stock-take table ─────────────────────────────────────────────────────
+
+function stockTake(l: Layout, { summary, money }: Context): void {
+  if (summary.metrics.length + summary.healthyMetrics.length === 0) return;
+  heading(
+    l,
+    'Your design system at a glance',
+    'A stock-take of the building blocks in your product that need attention, compared with what a tidy design system usually has. The biggest gaps are at the top.',
+    160,
+  );
+  const col = { what: l.left + PAD, found: l.left + 230, healthy: l.left + 330, status: l.left + 410, cost: l.left + l.width - PAD };
+  const headH = 24;
+  const rows = summary.metrics.map((m) => ({
+    m,
+    h: Math.max(
+      l.textHeight(m.label, { size: TYPE.body, font: 'bold' }, 200) + 2 + (m.explainer ? l.textHeight(m.explainer, small, 200) : 0),
+      12 + (m.foundNote ? l.textHeight(m.foundNote, small, 92) : 0),
+    ) + 14,
+  }));
+
+  const drawHeader = (top: number) => {
+    l.roundedRect(l.left + 0.75, top + 0.75, l.width - 1.5, headH, 9, COLORS.canvas);
+    l.roundedRect(l.left + 0.75, top + 10, l.width - 1.5, headH - 9.25, 0, COLORS.canvas);
+    l.rule(top + headH, l.left, l.width);
+    const h: TextStyle = { size: TYPE.small, color: COLORS.textTertiary };
+    l.text('What we looked at', col.what, top + 8, h);
+    l.text('What we found', col.found, top + 8, h);
+    l.text('A tidy system has', col.healthy, top + 8, h);
+    l.text('Status', col.status, top + 8, h);
+    l.textRight('Cost a year', col.cost, top + 8, h);
+  };
+
+  // The table may span pages: each page gets its own card and header.
+  let i = 0;
+  while (i < rows.length) {
+    l.ensure(headH + rows[i]!.h + 8);
     const top = l.y;
-    l.card(l.left, top, l.width, h);
-    let y = top + PAD;
-    y += l.text(`PHASE ${i + 1}`, l.left + PAD, y, { size: TYPE.tiny, font: 'bold', color: COLORS.accentText }) + 2;
-    y += l.text(phase.name, l.left + PAD, y, { size: 11, font: 'bold' }, textWidth);
-    y += 3 + l.text(phase.outcome, l.left + PAD, y + 3, body, textWidth);
-    l.text(itemsText, l.left + PAD, y + 8, small, textWidth);
-    const right = l.left + l.width - PAD;
-    l.textRight(`~${phase.weeks} ${phase.weeks === 1 ? 'week' : 'weeks'}`, right, top + PAD + 8, { size: 15, font: 'bold' });
-    l.textRight(`${phase.hours}h · ${money(phase.hours * audit.assumptions.hourlyRate)}`, right, top + PAD + 28, small);
-    l.y = top + h + 8;
+    let height = headH;
+    let j = i;
+    while (j < rows.length && top + height + rows[j]!.h + 8 <= PAGE.height - PAGE.margin - PAGE.footer) height += rows[j++]!.h;
+    height += 6;
+    l.card(l.left, top, l.width, height);
+    drawHeader(top);
+    let y = top + headH;
+    for (let k = i; k < j; k += 1) {
+      const { m, h } = rows[k]!;
+      if (k > i) l.rule(y);
+      let ty = y + 7;
+      ty += l.text(m.label, col.what, ty, { size: TYPE.body, font: 'bold' }, 200);
+      if (m.explainer) l.text(m.explainer, col.what, ty + 2, small, 200);
+      l.text(m.found, col.found, y + 7, { size: TYPE.body, font: 'bold' });
+      if (m.foundNote) l.text(m.foundNote, col.found, y + 20, small, 92);
+      l.text(m.healthy, col.healthy, y + 7, { size: TYPE.body, color: COLORS.textSecondary }, 76);
+      l.status(STATUS_LABELS[m.status], STATUS_COLOR[m.status], col.status, y + 8);
+      l.textRight(m.annualCost ? money(m.annualCost) : '—', col.cost, y + 7, { size: TYPE.body, color: m.annualCost ? COLORS.text : COLORS.textTertiary });
+      y += h;
+    }
+    l.y = top + height + 8;
+    i = j;
+  }
+  if (summary.healthyMetrics.length) {
+    const fine = `Also checked and already in good shape: ${summary.healthyMetrics.map((m) => `${m.label.toLowerCase()} (${m.found})`).join(', ')}.`;
+    l.ensure(l.textHeight(fine, secondary, l.width));
+    l.y += l.text(fine, l.left, l.y, secondary, l.width);
+  }
+  l.gap(18);
+}
+
+// ── Pages, method, glossary, help ────────────────────────────────────────
+
+function pagesReviewed(l: Layout, { summary }: Context): void {
+  if (summary.pages.length < 2) return;
+  section(l, 'Pages we reviewed', 'The findings in this report combine all of these pages.', (t) => {
+    let y = t;
+    summary.pages.forEach((p, i) => {
+      if (i > 0) l.rule(y - 5);
+      l.text(p.name, l.left + PAD, y, { size: TYPE.body, font: 'bold' }, 200);
+      l.text(p.url, l.left + PAD + 210, y, { size: TYPE.small, color: COLORS.textSecondary }, l.width - PAD * 2 - 290);
+      l.textRight(`${p.elements.toLocaleString('en-US')} elements`, l.left + l.width - PAD, y, { size: TYPE.small, color: COLORS.textSecondary });
+      y += 20;
+    });
+    return y - t - 8;
   });
+}
+
+function method(l: Layout, { audit, money }: Context): void {
+  const a = audit.assumptions;
+  const { snapshot, analysis } = audit;
+  heading(l, 'How we worked this out', 'So you can check our numbers.');
+  const paragraphs = [
+    `We opened your product in a normal browser and measured it the way your customers see it: ${snapshot.rendered.elements.length.toLocaleString('en-US')} visible elements and the ${snapshot.authored.declarations.length.toLocaleString('en-US')} styling rules behind them. We didn’t need access to your code, files or team.`,
+    `The money figures are estimates, not invoices. They assume about ${a.contributors} people regularly design or build your product, at around ${money(a.hourlyRate)} an hour. Every unnecessary colour, size or spacing value costs each of them roughly ${a.hoursPerExcessValue} hours a year (choosing between near-identical options, review comments, fixing drift), and every unnecessary component style about ${a.hoursPerExcessVariant} hours. Every hand-typed value takes about ${a.minutesPerLiteralEdit} minutes to find and change during a redesign. We count only ${Math.round(a.realisationRate * 100)}% of the total as realistically recoverable. If your team is bigger or smaller, the numbers scale with it.`,
+    `What this can’t see: other pages, screen sizes and states (menus that were closed, error messages that weren’t showing) weren’t part of this review, so the real picture is usually a little bigger, not smaller.${analysis.confidence.reasons.length ? ` ${analysis.confidence.reasons.join(' ')}` : ''}`,
+  ];
+  for (const p of paragraphs) {
+    l.ensure(l.textHeight(p, secondary, l.width) + 8);
+    l.y += l.text(p, l.left, l.y, secondary, l.width) + 8;
+  }
   l.gap(10);
 }
 
-function callToAction(l: Layout, { options, money, audit }: Context): void {
-  const { branding, clientName } = options;
+function glossary(l: Layout, { summary }: Context): void {
+  section(l, 'Words used in this report', undefined, (t) => {
+    let y = t;
+    summary.glossary.forEach((g, i) => {
+      if (i > 0) l.rule(y - 6);
+      l.text(g.term, l.left + PAD, y, { size: TYPE.body, font: 'bold' }, 130);
+      const h = l.text(g.meaning, l.left + PAD + 140, y, secondary, l.width - PAD * 2 - 140);
+      y += Math.max(h, 12) + 12;
+    });
+    return y - t - 12;
+  });
+}
+
+function howWeCanHelp(l: Layout, { options }: Context): void {
+  const { branding } = options;
   const who = branding.agencyName || 'We';
-  const title = branding.agencyName ? `How ${branding.agencyName} can help` : 'How we can help';
-  const pitch =
-    `${who} turn${branding.agencyName ? 's' : ''} audits like this into a working design system: a token layer, a lean component library and the governance to keep it lean, delivered alongside your roadmap rather than instead of it. ` +
-    `For ${clientName}, that means recovering an estimated ${money(audit.savings.annualSavings)} of team time every year, a faster path to rebrands and dark mode, and a more consistent, accessible product.`;
+  const text =
+    `If any of this is useful, ${branding.agencyName ? `${who} would` : 'we’d'} be glad to talk it through. We help product teams turn findings like these into a working design system: a small set of named colours, text styles and spacing, and components that get reused rather than rebuilt. ` +
+    `Happy to walk your team through the report, or to answer questions about any of it, with no obligation.`;
   const contact = [branding.preparedBy, branding.email, branding.website].filter(Boolean).join('   ·   ');
-  const note = branding.note.trim();
-  const width = l.width - PAD * 2;
-  const h =
-    PAD * 2 + 16 + l.textHeight(pitch, body, width) + (note ? 8 + l.textHeight(`“${note}”`, body, width) : 0) + (contact ? 22 : 0);
-  l.ensure(h);
-  const top = l.y;
-  l.roundedRect(l.left, top, l.width, h, 10, COLORS.accentSoft);
-  let y = top + PAD;
-  y += l.text(title, l.left + PAD, y, { size: 11, font: 'bold', color: COLORS.accentText }) + 6;
-  y += l.text(pitch, l.left + PAD, y, { ...body, color: COLORS.text }, width);
-  if (note) y += 8 + l.text(`“${note}”`, l.left + PAD, y + 8, { ...body, color: COLORS.text }, width);
-  if (contact) l.text(contact, l.left + PAD, y + 10, { size: TYPE.body, font: 'bold' }, width);
-  l.y = top + h + 18;
+  section(l, branding.agencyName ? `How ${branding.agencyName} can help` : 'How we can help', undefined, (t) => {
+    let h = l.text(text, l.left + PAD, t, body, l.width - PAD * 2);
+    if (contact) h += 10 + l.text(contact, l.left + PAD, t + h + 10, { size: TYPE.body, font: 'bold' }, l.width - PAD * 2);
+    return h;
+  });
 }
 
-// ── Appendix: every finding, method and limits ──────────────────────────
-
-function findings(l: Layout, { audit, options }: Context): void {
-  const open = audit.analysis.opportunities.filter((o) => !(options.dismissed ?? []).includes(o.id));
-  if (open.length === 0) return;
-  sectionTitle(l, 'All findings', `${open.length} issues found on the captured page, most severe first.`);
-  const textWidth = l.width - PAD * 2 - 110;
-  for (const o of open) {
-    const detail = `${o.detail} ${o.fix}`;
-    const h = 14 + l.textHeight(o.title, { size: TYPE.body, font: 'bold' }, textWidth) + 2 + l.textHeight(detail, small, textWidth);
-    l.ensure(h + 4);
-    const top = l.y;
-    l.card(l.left, top, l.width, h);
-    const tone = SEVERITY_TONE[o.severity];
-    l.pill(o.severity.toUpperCase(), l.left + PAD - 4, top + 8, tone.fill, tone.text, 6.5);
-    let y = top + 7;
-    y += l.text(o.title, l.left + PAD + 50, y, { size: TYPE.body, font: 'bold' }, textWidth);
-    l.text(detail, l.left + PAD + 50, y + 2, small, textWidth);
-    l.textRight(`~${o.effortHours}h`, l.left + l.width - PAD, top + 8, { size: TYPE.body, font: 'bold' });
-    l.y = top + h + 4;
-  }
-  l.gap(14);
-}
-
-function method(l: Layout, { audit }: Context): void {
-  const { assumptions: a, snapshot, analysis } = audit;
-  const money = (n: number) => formatMoney(n, a.currency);
-  const paragraphs = [
-    `How this audit works. The product was captured in the browser as a user sees it: ${snapshot.rendered.elements.length.toLocaleString('en-US')} elements and their computed styles, plus ${snapshot.authored.declarations.length.toLocaleString('en-US')} design declarations from its stylesheets. No source code or internal documentation was used. The capture reflects one page at ${snapshot.viewport.width}x${snapshot.viewport.height}; other pages, breakpoints and states will add to these findings, not remove them.`,
-    `Cost model (planning estimate). ${a.contributors} people regularly design or build UI at ${money(a.hourlyRate)}/h. Each redundant style value costs each of them ~${a.hoursPerExcessValue}h a year and each redundant component variant ~${a.hoursPerExcessVariant}h (choosing between near-identical options, reviews, fixing drift). Each hard-coded value takes ~${a.minutesPerLiteralEdit} minutes to find and edit per re-theme, at ${a.rethemesPerYear} re-theme(s) a year. ${Math.round(a.realisationRate * 100)}% of the yearly cost is counted as recoverable. Cleanup effort is the sum of the per-finding estimates above.`,
-    `Confidence: ${analysis.confidence.level}.${analysis.confidence.reasons.length ? ` ${analysis.confidence.reasons.join(' ')}` : ''} Scores and component recognition are heuristics.`,
-  ];
-  sectionTitle(l, 'Method and assumptions');
-  for (const p of paragraphs) {
-    l.ensure(l.textHeight(p, small, l.width) + 8);
-    l.y += l.text(p, l.left, l.y, small, l.width) + 8;
-  }
-}
-
-function footers(l: Layout, { options }: Context): void {
-  const label = ['Design System Audit', options.clientName, options.branding.agencyName && `Prepared by ${options.branding.agencyName}`]
+function footers(l: Layout, { options, summary }: Context): void {
+  const text = [summary.clientName, 'Design system audit', options.branding.agencyName && `Prepared by ${options.branding.agencyName}`]
     .filter(Boolean)
     .join('  ·  ');
   l.pages.forEach((page, i) => {
     l.page = page;
     const top = PAGE.height - PAGE.margin + 6;
-    l.text(label, l.left, top, { size: TYPE.tiny, color: COLORS.textTertiary }, l.width - 60);
+    l.text(text, l.left, top, { size: TYPE.tiny, color: COLORS.textTertiary }, l.width - 60);
     l.textRight(`${i + 1} / ${l.pages.length}`, l.left + l.width, top, { size: TYPE.tiny, color: COLORS.textTertiary });
   });
 }
@@ -351,7 +427,7 @@ function footers(l: Layout, { options }: Context): void {
 export async function auditToPdf(audit: Audit, options: ClientReportOptions): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const fonts = { regular: await pdf.embedFont(StandardFonts.Helvetica), bold: await pdf.embedFont(StandardFonts.HelveticaBold) };
-  const summary = summarise(audit, options.dismissed);
+  const summary = summarise(audit, { clientName: options.clientName, dismissed: options.dismissed });
   const ctx: Context = { audit, summary, options, money: (n) => formatMoney(n, audit.assumptions.currency) };
 
   pdf.setTitle(`Design System Audit: ${options.clientName}`);
@@ -363,19 +439,13 @@ export async function auditToPdf(audit: Audit, options: ClientReportOptions): Pr
 
   const l = new Layout(pdf, fonts);
   await cover(l, ctx);
-  kpis(l, ctx);
-  consolidation(l, ctx, 7);
-  facts(l, ctx);
-
-  l.addPage();
-  priorities(l, ctx);
-  areaHealth(l, ctx);
-
-  plan(l, ctx);
-  callToAction(l, ctx);
-  findings(l, ctx);
+  numbers(l, ctx);
+  painPoints(l, ctx);
+  stockTake(l, ctx);
+  pagesReviewed(l, ctx);
   method(l, ctx);
+  glossary(l, ctx);
+  howWeCanHelp(l, ctx);
   footers(l, ctx);
-
   return pdf.save();
 }

@@ -1,49 +1,83 @@
 /**
- * The executive overview: the same story as page one of the client PDF, so
- * what you see in the panel is what the client will read. Cost first, then
- * what to consolidate, where to start, and how each area stands.
+ * The overview mirrors the client report: the headline cost, the one thing
+ * they probably didn't know, what we found (which you can leave out of the
+ * report), and the stock-take. What you see here is what the client reads.
  */
 
-import { useState } from 'react';
-import { summarise, STATUS_LABELS, type HealthStatus } from '../../../../insights';
-import type { ConfidenceLevel } from '../../../../inference/types';
+import { summarise, STATUS_LABELS, type HealthStatus, type PainPoint } from '../../../../insights';
+import type { ConfidenceLevel, Severity } from '../../../../inference/types';
 import { formatMoney, formatMoneyShort } from '../../../../savings';
-import { Badge, Button, Card, FileIcon, InfoIcon, List, Meter, Row, Spinner, type Tone } from '../ui';
+import { Badge, Button, Card, EyeOffIcon, FileIcon, InfoIcon, List, Menu, PagesIcon, Row, Spinner, TargetIcon, UndoIcon, type Tone } from '../ui';
 import { Stat, StatStrip } from '../components/Stat';
-import { destinationFor, useNavigation } from '../navigation';
+import { useNavigation } from '../navigation';
 import { useAuditState, useController } from '../use-audit';
 import { useReports } from '../use-reports';
 
 const CONFIDENCE_TONE: Record<ConfidenceLevel, Tone> = { high: 'success', medium: 'warning', low: 'danger' };
 const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = { high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence' };
 const STATUS_TONE: Record<HealthStatus, Tone> = { strong: 'success', 'needs-work': 'warning', 'at-risk': 'danger' };
+const PRIORITY: Record<Severity, { label: string; tone: Tone }> = {
+  high: { label: 'High priority', tone: 'danger' },
+  medium: { label: 'Worth fixing', tone: 'warning' },
+  low: { label: 'Nice to have', tone: 'neutral' },
+};
 
 export function OverviewView() {
   const controller = useController();
-  const { audit, dismissed, hostAccess } = useAuditState();
-  const { go, openSettings, openReportDetails } = useNavigation();
+  const { audit, dismissed, hostAccess, collection } = useAuditState();
+  const { go, openReportDetails, openSettings } = useNavigation();
   const reports = useReports();
-  const [allRows, setAllRows] = useState(false);
   if (!audit) return null;
 
-  const { analysis, savings, assumptions } = audit;
-  const summary = summarise(audit, dismissed);
+  const { analysis, assumptions, snapshot } = audit;
+  const clientName = controller.clientName();
+  const summary = summarise(audit, { clientName, dismissed });
+  const leftOut = summarise(audit, { clientName }).painPoints.filter((p) => dismissed.includes(p.id));
   const money = (n: number) => formatMoney(n, assumptions.currency);
   const short = (n: number) => formatMoneyShort(n, assumptions.currency);
   const comparison = controller.comparison();
-  const rows = allRows ? summary.consolidation : summary.consolidation.slice(0, 6);
-  const opportunityById = new Map(analysis.opportunities.map((o) => [o.id, o]));
+
+  const findingRow = (p: PainPoint, index: number, excluded: boolean) => (
+    <Row
+      key={p.id}
+      wrap
+      leading={<span className="step">{excluded ? '–' : index}</span>}
+      title={<span className={excluded ? 'row-dimmed' : undefined}>{p.title}</span>}
+      meta={
+        <span className="value-flags">
+          <Badge tone={PRIORITY[p.severity].tone}>{PRIORITY[p.severity].label}</Badge>
+          {p.annualCost ? <span>about {money(p.annualCost)} a year</span> : null}
+        </span>
+      }
+      onClick={() => void controller.highlight(p.selectors, p.title)}
+      actions={
+        <Menu
+          label={`Actions for ${p.title}`}
+          sections={[
+            {
+              items: [
+                ...(p.selectors.length ? [{ label: 'Highlight on page', icon: <TargetIcon />, onSelect: () => void controller.highlight(p.selectors, p.title) }] : []),
+                excluded
+                  ? { label: 'Put back in the report', icon: <UndoIcon />, onSelect: () => void controller.setDismissed(p.id, false) }
+                  : { label: 'Leave out of the report', icon: <EyeOffIcon />, onSelect: () => void controller.setDismissed(p.id, true) },
+              ],
+            },
+          ]}
+        />
+      }
+    />
+  );
 
   return (
     <div className="stack">
-      <Card className="hero">
-        <div className="hero__eyebrow">Cost of inconsistency</div>
-        <div className="hero__figure">
-          {money(savings.annualDragCost)}
-          <span className="hero__unit"> / year</span>
-        </div>
-        <p className="hero__text">{summary.subheadline}</p>
-        <div className="hero__actions">
+      <Card title={summary.headline} subtitle={summary.subheadline}>
+        <StatStrip>
+          <Stat value={short(summary.numbers.yearlyCost)} label="Yearly cost of inconsistency" />
+          <Stat value={short(summary.numbers.recoverable)} label="Could be saved each year" />
+          <Stat value={`${summary.numbers.hoursLost}h`} label="Team hours lost a year" />
+          <Stat value={`${summary.score}/100`} label="Consistency score" />
+        </StatStrip>
+        <div className="overview-actions">
           <Button
             variant="primary"
             icon={reports.generating ? <Spinner label="Generating" /> : <FileIcon size={14} />}
@@ -58,12 +92,19 @@ export function OverviewView() {
         </div>
       </Card>
 
-      <StatStrip>
-        <Stat value={short(savings.annualSavings)} label="Recoverable / year" />
-        <Stat value={short(savings.cleanupCost)} label={`Cleanup, ${summary.cleanupDuration.replace('about ', '~')}`} />
-        <Stat value={savings.paybackMonths === null ? '—' : `${savings.paybackMonths} mo`} label="Payback" />
-        <Stat value={`${summary.score}`} label={`Maturity · ${summary.grade} ${summary.maturity}`} />
-      </StatStrip>
+      <Card
+        title={snapshot.pages ? `${snapshot.pages.length} pages reviewed` : '1 page reviewed'}
+        subtitle={
+          snapshot.pages
+            ? snapshot.pages.map((p) => p.url.replace(/^https?:\/\/[^/]+/, '') || '/').join(', ')
+            : 'Add more pages for a fuller picture of the product.'
+        }
+        action={
+          <Button size="sm" variant="ghost" icon={<PagesIcon size={14} />} onClick={() => go('pages')}>
+            {collection.length ? `Pages (${collection.length})` : 'Add pages'}
+          </Button>
+        }
+      />
 
       {comparison && (
         <Card
@@ -77,128 +118,59 @@ export function OverviewView() {
         >
           <List label="Score changes">
             {comparison.areas.map((a) => (
-              <Row
-                key={a.key}
-                title={a.label}
-                meta={`${a.before} → ${a.after}`}
-                trailing={<Badge tone={a.delta > 0 ? 'success' : a.delta < 0 ? 'danger' : 'neutral'}>{a.delta > 0 ? `+${a.delta}` : a.delta}</Badge>}
-              />
+              <Row key={a.key} title={a.label} meta={`${a.before} → ${a.after}`} trailing={<span className="cost">{a.delta > 0 ? `+${a.delta}` : a.delta}</span>} />
             ))}
           </List>
         </Card>
       )}
 
+      {summary.hook && <Card title="Something they may not know" subtitle={summary.hook} />}
+
+      <Card title="What we found" subtitle="In report order. Use the menu on a finding to leave it out of the report.">
+        {summary.painPoints.length === 0 && leftOut.length === 0 ? (
+          <p className="muted">Nothing stands out. This product is built consistently.</p>
+        ) : (
+          <List label="Findings">
+            {summary.painPoints.map((p, i) => findingRow(p, i + 1, false))}
+            {leftOut.map((p) => findingRow(p, 0, true))}
+          </List>
+        )}
+      </Card>
+
       <Card
-        title="What you have vs. what you need"
-        subtitle={
-          summary.consolidation.length
-            ? `${summary.consolidationTotals.current} styles in use where ${summary.consolidationTotals.recommended} would do (−${summary.consolidationTotals.reduction}%).`
-            : 'Every style family is within a healthy range.'
-        }
+        title="At a glance"
+        subtitle="What we found against what a tidy design system usually has."
         action={
           <Button size="sm" variant="ghost" onClick={openSettings}>
             Assumptions
           </Button>
         }
       >
-        {rows.length > 0 && (
-          <List label="Consolidation">
-            {rows.map((row) => (
-              <Row
-                key={row.key}
-                title={row.label}
-                meta={`${row.current} in use → ${row.recommended} needed`}
-                trailing={
-                  <span className="consolidation__cost">
-                    <span className="consolidation__pct">−{Math.round((row.excess / row.current) * 100)}%</span>
-                    {money(row.annualCost)}/yr
-                  </span>
-                }
-                onClick={() => void controller.highlight(row.selectors, `${row.label}: redundant`)}
-              />
-            ))}
-          </List>
-        )}
-        {summary.consolidation.length > 6 && (
-          <Button size="sm" variant="ghost" onClick={() => setAllRows((v) => !v)}>
-            {allRows ? 'Show fewer' : `Show all ${summary.consolidation.length}`}
-          </Button>
-        )}
-        {savings.retheme.literals > 0 && (
-          <p className="callout">
-            A rebrand or dark mode today means editing <strong>{savings.retheme.literals.toLocaleString()}</strong> hard-coded values (~
-            {savings.retheme.hoursToday}h). With tokens: <strong>{savings.retheme.distinctValues.toLocaleString()}</strong> edits in one place (~
-            {savings.retheme.hoursWithTokens}h).
-          </p>
-        )}
-      </Card>
-
-      <Card
-        title="Where to start"
-        subtitle="Most impact for the effort, in order."
-        action={
-          <Button size="sm" variant="ghost" onClick={() => go('opportunities')}>
-            All {analysis.opportunities.length}
-          </Button>
-        }
-      >
-        {summary.priorities.length === 0 ? (
-          <p className="muted">Nothing stands out. This page is built consistently.</p>
-        ) : (
-          <List label="Priorities">
-            {summary.priorities.map((p, i) => (
-              <Row
-                key={p.id}
-                leading={<span className="step">{i + 1}</span>}
-                title={p.title}
-                meta={p.why}
-                wrap
-                trailing={`~${p.effortHours}h`}
-                onClick={() => void controller.highlight(opportunityById.get(p.id)?.selectors ?? [], p.title)}
-              />
-            ))}
-          </List>
-        )}
-      </Card>
-
-      <Card title="Health by area" subtitle={`${summary.score}/100 overall. Select an area for the evidence.`}>
-        <List label="Area health">
-          {summary.areas.map((area) => {
-            const target = destinationFor(area.key);
-            return (
-              <Row
-                key={area.key}
-                title={area.label}
-                meta={area.impact}
-                wrap
-                onClick={() => go(target.view, target.foundation)}
-                trailing={
-                  <>
-                    <Badge tone={STATUS_TONE[area.status]}>{STATUS_LABELS[area.status]}</Badge>
-                    <div className="area-meter">
-                      <Meter value={area.score} label={`${area.label} score`} />
-                    </div>
-                  </>
-                }
-              />
-            );
-          })}
+        <List label="Stock-take">
+          {[...summary.metrics, ...summary.healthyMetrics].map((m) => (
+            <Row
+              key={m.key}
+              wrap
+              title={m.label}
+              meta={`${m.found} found${m.foundNote ? ` (${m.foundNote})` : ''} · ${m.healthy === `${m.found} is fine` ? 'fine as it is' : `a tidy system has ${m.healthy}`}`}
+              trailing={
+                <>
+                  <Badge tone={STATUS_TONE[m.status]}>{STATUS_LABELS[m.status]}</Badge>
+                  {m.annualCost ? <span className="cost">{short(m.annualCost)}</span> : null}
+                </>
+              }
+              onClick={m.selectors.length ? () => void controller.highlight(m.selectors, m.label) : undefined}
+            />
+          ))}
         </List>
       </Card>
 
-      <Card
-        title="About this capture"
-        action={
-          <Badge tone={CONFIDENCE_TONE[analysis.confidence.level]} dot>
-            {CONFIDENCE_LABEL[analysis.confidence.level]}
-          </Badge>
-        }
-      >
+      <Card title="About this capture" action={<Badge tone={CONFIDENCE_TONE[analysis.confidence.level]}>{CONFIDENCE_LABEL[analysis.confidence.level]}</Badge>}>
         <ul className="reasons">
           <li>
             <InfoIcon size={14} />
-            {audit.snapshot.rendered.elements.length.toLocaleString()} elements, {audit.snapshot.authored.declarations.length.toLocaleString()}{' '}
-            design declarations and {analysis.tokens.definedCount} tokens read from one viewport.
+            {snapshot.rendered.elements.length.toLocaleString()} elements and {snapshot.authored.declarations.length.toLocaleString()} styling rules read
+            {snapshot.pages ? ` across ${snapshot.pages.length} pages` : ' from one page'}.
           </li>
           {analysis.confidence.reasons.map((reason) => (
             <li key={reason}>

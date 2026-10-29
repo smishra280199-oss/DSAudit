@@ -5,6 +5,8 @@
  */
 
 import { compareAudits, runAudit, withAssumptions, type Audit } from '../../../audit';
+import { mergeSnapshots } from '../../../audit/merge';
+import { selectorsForPage } from '../../../shared/page-scope';
 import type { InspectResult } from '../../../inspect/types';
 import type { SavingsAssumptions } from '../../../savings';
 import { capturability, type CapturabilityReason } from '../../../shared/restricted';
@@ -23,6 +25,7 @@ import { SnapshotStore } from '../../../storage/snapshot-store';
 import type { Bridge, TabInfo } from '../../bridge/types';
 
 const HOST_ACCESS_ASKED_KEY = 'settings:hostAccessAsked';
+const COLLECTION_KEY = 'collection:pages';
 
 export type CaptureStatus = 'idle' | 'capturing' | 'error';
 
@@ -36,6 +39,8 @@ export interface AuditState {
   /** The audit being compared against the current one, if any. */
   baseline: Audit | null;
   history: SnapshotMeta[];
+  /** Pages collected for a multi-page audit, in the order they were added. */
+  collection: SnapshotMeta[];
   dismissed: string[];
   assumptions: SavingsAssumptions | null;
   /** Agency details printed on client reports. */
@@ -63,6 +68,7 @@ export class AuditController {
     audit: null,
     baseline: null,
     history: [],
+    collection: [],
     dismissed: [],
     assumptions: null,
     branding: EMPTY_BRANDING,
@@ -110,7 +116,9 @@ export class AuditController {
       this.bridge.storage.get<boolean>(HOST_ACCESS_ASKED_KEY),
     ]);
     this.hostAccessAsked = asked === true;
-    this.set({ ready: true, history, assumptions, branding, clientNames, hostAccess });
+    const collectionIds = (await this.bridge.storage.get<string[]>(COLLECTION_KEY)) ?? [];
+    const collection = collectionIds.map((id) => history.find((m) => m.id === id)).filter((m): m is SnapshotMeta => m !== undefined);
+    this.set({ ready: true, history, collection, assumptions, branding, clientNames, hostAccess });
     await this.onTabChanged(tab);
 
     this.unsubscribers.push(
@@ -132,7 +140,9 @@ export class AuditController {
     const sameUrl = tab?.url === this.state.tab?.url;
     this.set({ tab, capturability: capturability(tab?.url), inspect: { active: false, result: sameUrl ? this.state.inspect.result : null } });
     if (sameUrl && this.state.audit) return;
-    const latest = tab ? this.state.history.find((m) => m.url === tab.url) : undefined;
+    // A multi-page audit stays open while you move between the pages it covers.
+    if (tab && this.state.audit?.snapshot.pages?.some((p) => p.url === tab.url)) return;
+    const latest = tab ? this.state.history.find((m) => m.url === tab.url && !m.pageCount) : undefined;
     if (latest) await this.open(latest.id);
     else this.set({ audit: null, baseline: null, dismissed: [] });
   }
@@ -148,6 +158,13 @@ export class AuditController {
     if (!tab || this.state.capturability !== 'ok' || this.state.status === 'capturing') return Promise.resolve();
     const permission = this.hostAccessAsked ? null : this.bridge.requestHostAccess();
     return this.runCapture(tab, permission);
+  }
+
+  /** Captures the open page and adds it to the multi-page audit. Call from a click handler. */
+  async captureAndAddPage(): Promise<void> {
+    await this.capture();
+    const { audit } = this.state;
+    if (this.state.status === 'idle' && audit && !audit.snapshot.pages) await this.addToCollection(audit.snapshot.id);
   }
 
   private async runCapture(tab: TabInfo, permission: Promise<boolean> | null): Promise<void> {
@@ -179,6 +196,52 @@ export class AuditController {
     this.notify(granted ? 'Site access granted.' : 'Site access was not granted.');
   }
 
+  // ── Multi-page audits ──────────────────────────────────────────────────
+
+  private async saveCollection(collection: SnapshotMeta[]): Promise<void> {
+    this.set({ collection });
+    await this.bridge.storage.set({ [COLLECTION_KEY]: collection.map((m) => m.id) });
+  }
+
+  /** Adds a captured page; a newer capture of the same address replaces the older one. */
+  async addToCollection(id: string): Promise<void> {
+    const meta = this.state.history.find((m) => m.id === id);
+    if (!meta || meta.pageCount) return;
+    const rest = this.state.collection.filter((m) => m.url !== meta.url);
+    await this.saveCollection([...rest, meta]);
+    this.notify(`Page added. ${rest.length + 1} ${rest.length === 0 ? 'page' : 'pages'} in this audit.`);
+  }
+
+  async removeFromCollection(id: string): Promise<void> {
+    await this.saveCollection(this.state.collection.filter((m) => m.id !== id));
+  }
+
+  async clearCollection(): Promise<void> {
+    await this.saveCollection([]);
+  }
+
+  /** Audits every collected page together and opens the combined result. */
+  async auditCollection(): Promise<void> {
+    const snapshots = (await Promise.all(this.state.collection.map((m) => this.store.load(m.id)))).filter(
+      (s): s is PageSnapshot => s !== null,
+    );
+    if (snapshots.length < 2) {
+      this.notify('Add at least two pages first.');
+      return;
+    }
+    this.set({ status: 'capturing', error: null });
+    try {
+      const first = snapshots[0]!;
+      const title = `${defaultClientName(first.title, first.url)} · ${snapshots.length} pages`;
+      const merged = mergeSnapshots(snapshots, newId(), title);
+      const audit = runAudit(merged, this.state.assumptions!);
+      await this.store.save(merged, audit.score.overall);
+      this.set({ status: 'idle', audit, baseline: null, dismissed: [], history: await this.store.list() });
+    } catch (error) {
+      this.set({ status: 'error', error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
   // ── History ────────────────────────────────────────────────────────────
 
   async open(id: string): Promise<void> {
@@ -192,6 +255,7 @@ export class AuditController {
 
   async remove(id: string): Promise<void> {
     await this.store.remove(id);
+    if (this.state.collection.some((m) => m.id === id)) await this.removeFromCollection(id);
     const history = await this.store.list();
     const removingCurrent = this.state.audit?.snapshot.id === id;
     this.set({
@@ -233,9 +297,17 @@ export class AuditController {
   async highlight(selectors: string[], label?: string): Promise<void> {
     const { tab } = this.state;
     if (!tab || selectors.length === 0 || this.state.capturability !== 'ok') return;
+    // Multi-page audits scope selectors by page; only this page's can be highlighted.
+    const pages = this.state.audit?.snapshot.pages;
+    const page = pages ? pages.findIndex((p) => p.url === tab.url) : null;
+    const local = selectorsForPage(selectors, page === -1 ? null : page);
+    if (local.length === 0) {
+      this.notify(pages ? 'Those elements are on another page of this audit.' : 'Nothing to highlight.');
+      return;
+    }
     try {
       this.highlighted = true;
-      const found = await this.bridge.highlight(tab, selectors, label);
+      const found = await this.bridge.highlight(tab, local, label);
       if (found === 0) this.notify('Those elements are no longer on the page.');
     } catch {
       this.notify('Couldn’t reach the page. Reload it and try again.');

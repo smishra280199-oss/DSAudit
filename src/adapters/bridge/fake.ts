@@ -19,7 +19,7 @@ export class FakeBridge implements Bridge {
   private readonly inspectListeners = new Set<InspectListener>();
 
   constructor(
-    private readonly page: CapturedPage,
+    private page: CapturedPage,
     tab: TabInfo = { id: 1, url: page.url, title: page.title },
   ) {
     this.tab = tab;
@@ -36,6 +36,11 @@ export class FakeBridge implements Bridge {
   onActiveTabChanged(listener: (tab: TabInfo | null) => void) {
     this.tabListeners.add(listener);
     return () => this.tabListeners.delete(listener);
+  }
+
+  /** Test helper: what the next capture returns, e.g. after navigating. */
+  setPage(page: CapturedPage) {
+    this.page = page;
   }
 
   /** Test helper: simulate the user switching tabs. */

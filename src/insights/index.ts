@@ -1,19 +1,22 @@
 /**
- * Executive insights: the audit condensed into what a VP of Design or
- * Product needs at a glance. What inconsistency costs, what you have versus
- * what you need, where to start, and a phased plan. Both the panel overview
- * and the client report are rendered from this one model.
+ * The executive summary: the audit retold for someone who has never seen a
+ * design audit before. A personal introduction, one thing they probably
+ * didn't know, what inconsistency costs them, the pain points (where, why,
+ * what to do) and a plain stock-take of their design system.
+ *
+ * The panel overview and every client report render this one model. It
+ * deliberately says nothing about the cost of anyone's services.
  */
 
 import type { Audit } from '../audit';
-import type { AreaKey, Opportunity, Severity } from '../inference/types';
-import type { ConsolidationLine } from '../savings';
-import { AREA_IMPACT, OPPORTUNITY_IMPACT, STATUS_LABELS, type HealthStatus } from './narrative';
+import type { AreaKey } from '../inference/types';
+import { formatMoney } from '../savings';
+import { pageName } from './describe';
+import { findPainPoints, type PainPoint } from './findings';
+import { AREA_IMPACT, GLOSSARY, METRIC_LABELS, STATUS_LABELS, type HealthStatus } from './narrative';
 
-export { STATUS_LABELS, type HealthStatus };
-
-/** Focused hours one person delivers per week, for turning effort into timelines. */
-export const HOURS_PER_WEEK = 30;
+export { STATUS_LABELS, GLOSSARY, type HealthStatus, type PainPoint };
+export type { Evidence } from './findings';
 
 export interface AreaHealth {
   key: AreaKey;
@@ -23,150 +26,219 @@ export interface AreaHealth {
   impact: string;
 }
 
-export interface Priority {
-  id: string;
-  title: string;
-  why: string;
-  fix: string;
-  severity: Severity;
-  effortHours: number;
-  area: AreaKey;
-}
-
-export interface Phase {
-  name: string;
-  outcome: string;
-  hours: number;
-  weeks: number;
-  items: string[];
-}
-
-export interface KeyFact {
-  value: string;
+/** One row of the stock-take: what we found against what a tidy system has. */
+export interface MetricRow {
+  key: string;
   label: string;
+  explainer: string;
+  found: string;
+  /** Extra context for the found value, e.g. "8 near-identical copies". */
+  foundNote: string;
+  healthy: string;
+  status: HealthStatus;
+  /** Yearly cost of the difference; null when it can't be priced or there is none. */
+  annualCost: number | null;
+  selectors: string[];
+}
+
+export interface PageSummary {
+  name: string;
+  url: string;
+  elements: number;
 }
 
 export interface ExecutiveSummary {
+  clientName: string;
   score: number;
-  grade: string;
-  maturity: string;
-  /** The one sentence a decision maker should remember. */
+  status: HealthStatus;
+  scoreExplainer: string;
+  pages: PageSummary[];
+  intro: string;
+  /** One thing they probably didn't know about their product. */
+  hook: string | null;
   headline: string;
   subheadline: string;
-  /** Rows with something to consolidate, costliest first. */
-  consolidation: ConsolidationLine[];
-  consolidationTotals: { current: number; recommended: number; reduction: number };
+  numbers: { pages: number; stylesFound: number; hoursLost: number; yearlyCost: number; recoverable: number };
+  painPoints: PainPoint[];
+  /** Stock-take rows that need attention, biggest gaps first. */
+  metrics: MetricRow[];
+  /** Everything else we checked that is already in good shape. */
+  healthyMetrics: MetricRow[];
   areas: AreaHealth[];
-  /** Areas in the worst state, worst first. */
-  weakest: AreaHealth[];
-  priorities: Priority[];
-  plan: Phase[];
-  facts: KeyFact[];
-  /** Person-weeks of cleanup at HOURS_PER_WEEK. */
-  personWeeks: number;
-  /** The cleanup effort in words: "about 16 hours" or "about 3 person-weeks". */
-  cleanupDuration: string;
+  glossary: typeof GLOSSARY;
 }
-
-const SEVERITY_RANK: Record<Severity, number> = { high: 3, medium: 2, low: 1 };
 
 export function statusFor(score: number): HealthStatus {
   return score >= 75 ? 'strong' : score >= 50 ? 'needs-work' : 'at-risk';
 }
 
-const PHASES: { name: string; outcome: string; areas: AreaKey[] }[] = [
-  {
-    name: 'Foundations & tokens',
-    outcome: 'One palette, type scale and spacing grid, expressed as design tokens.',
-    areas: ['color', 'typography', 'spacing', 'shape', 'elevation', 'motion', 'tokens'],
-  },
-  {
-    name: 'Component consolidation',
-    outcome: 'Named, reusable component variants that replace one-off styles.',
-    areas: ['components'],
-  },
-  {
-    name: 'Accessibility & interaction',
-    outcome: 'WCAG AA contrast, labelled controls and consistent hover and focus states.',
-    areas: ['accessibility', 'interaction'],
-  },
-];
+const STATUS_RANK: Record<HealthStatus, number> = { 'at-risk': 0, 'needs-work': 1, strong: 2 };
 
-function weeks(hours: number): number {
-  return Math.max(0.5, Math.round((hours / HOURS_PER_WEEK) * 2) / 2);
+const SCORE_WORDS: Record<HealthStatus, string> = {
+  strong: 'a healthy design system',
+  'needs-work': 'a good foundation with clear gaps',
+  'at-risk': 'a design system that has drifted a long way',
+};
+
+function lineStatus(current: number, excess: number): HealthStatus {
+  if (excess <= 0) return 'strong';
+  return excess / current > 0.3 ? 'at-risk' : 'needs-work';
 }
 
-function priorityFrom(o: Opportunity): Priority {
-  return { id: o.id, title: o.title, why: OPPORTUNITY_IMPACT[o.kind], fix: o.fix, severity: o.severity, effortHours: o.effortHours, area: o.area };
-}
+function metricRows(audit: Audit, painPoints: PainPoint[]): MetricRow[] {
+  const { savings, analysis } = audit;
+  const rows: MetricRow[] = [];
+  const colourCopies = (analysis.foundations.color.palette ?? []).reduce((n, c) => n + c.members.length - 1, 0);
 
-/** High severity first; among equals, the cheapest to fix (quick wins) first. */
-function byPriority(a: Opportunity, b: Opportunity): number {
-  return SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || a.effortHours - b.effortHours;
-}
-
-export function summarise(audit: Audit, dismissed: string[] = []): ExecutiveSummary {
-  const { analysis, score, savings, assumptions } = audit;
-  const money = (n: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: assumptions.currency, maximumFractionDigits: 0 }).format(n);
-  const open = analysis.opportunities.filter((o) => !dismissed.includes(o.id));
-
-  const areas: AreaHealth[] = score.areas
-    .filter((a) => a.applicable)
-    .map((a) => {
-      const status = statusFor(a.score);
-      return { key: a.key, label: a.label, score: a.score, status, impact: AREA_IMPACT[a.key][status] };
+  for (const line of savings.lines) {
+    if (line.current === 0) continue;
+    const meta =
+      METRIC_LABELS[line.key] ??
+      (line.kind === 'variant'
+        ? { label: line.label.replace(' variants', ' styles'), explainer: `Visually different versions of your ${line.label.replace(' variants', '').toLowerCase()}s` }
+        : { label: line.label, explainer: '' });
+    const twins =
+      line.key === 'colors'
+        ? colourCopies
+        : (Object.values(analysis.foundations)
+            .flatMap((f) => f.groups)
+            .find((g) => g.key === line.key)
+            ?.values.filter((v) => v.nearDuplicateOf).length ?? 0);
+    rows.push({
+      key: line.key,
+      label: meta.label,
+      explainer: meta.explainer,
+      found: String(line.current),
+      foundNote: twins > 0 ? `${twins} near-identical ${twins === 1 ? 'copy' : 'copies'}` : '',
+      healthy: line.excess > 0 ? `about ${line.recommended}` : `${line.current} is fine`,
+      status: lineStatus(line.current, line.excess),
+      annualCost: line.excess > 0 ? line.annualCost : null,
+      selectors: line.selectors,
     });
-  const weakest = areas.filter((a) => a.status !== 'strong').sort((a, b) => a.score - b.score);
+  }
 
-  const consolidation = savings.lines.filter((l) => l.excess > 0).sort((a, b) => b.annualHours - a.annualHours);
-  const current = consolidation.reduce((n, l) => n + l.current, 0);
-  const recommended = consolidation.reduce((n, l) => n + l.recommended, 0);
+  const coverage = analysis.tokens.coverage;
+  if (coverage !== null) {
+    const tokenPoint = painPoints.find((p) => p.id === 'tokens');
+    rows.push({
+      key: 'tokens',
+      label: 'Styling that uses tokens',
+      explainer: 'Values that come from named design tokens instead of being typed in',
+      found: `${Math.round(coverage * 100)}%`,
+      foundNote: `${savings.retheme.literals.toLocaleString('en-US')} values typed by hand`,
+      healthy: '70% or more',
+      status: coverage >= 0.7 ? 'strong' : coverage >= 0.4 ? 'needs-work' : 'at-risk',
+      annualCost: tokenPoint?.annualCost ?? null,
+      selectors: [],
+    });
+  }
 
-  const plan = PHASES.map((phase) => {
-    const items = open.filter((o) => phase.areas.includes(o.area));
-    const hours = Math.round(items.reduce((n, o) => n + o.effortHours, 0) * 10) / 10;
-    return { name: phase.name, outcome: phase.outcome, hours, weeks: weeks(hours), items: items.sort(byPriority).map((o) => o.title) };
-  }).filter((p) => p.items.length > 0);
+  const { textChecked, contrastFailures } = analysis.accessibility;
+  if (textChecked > 0) {
+    const share = contrastFailures.length / textChecked;
+    rows.push({
+      key: 'contrast',
+      label: 'Readable text',
+      explainer: 'Text with enough contrast to meet the WCAG accessibility standard',
+      found: `${textChecked - contrastFailures.length} of ${textChecked}`,
+      foundNote: contrastFailures.length ? `${contrastFailures.length} too faint` : '',
+      healthy: `all ${textChecked}`,
+      status: share === 0 ? 'strong' : share < 0.1 ? 'needs-work' : 'at-risk',
+      annualCost: null,
+      selectors: contrastFailures.map((f) => f.selector),
+    });
+  }
 
-  const personWeeks = weeks(savings.cleanupHours);
-  const cleanupDuration =
-    savings.cleanupHours < HOURS_PER_WEEK
-      ? `about ${Math.max(1, Math.round(savings.cleanupHours))} hours`
-      : `about ${personWeeks} person-weeks`;
-  const { tokens, accessibility } = analysis;
-  const facts: KeyFact[] = [
-    { value: `${Math.round((tokens.coverage ?? 0) * 100)}%`, label: 'of styling uses design tokens' },
-    { value: savings.retheme.literals.toLocaleString('en-US'), label: 'hard-coded style values' },
-    { value: `${(analysis.foundations.color.palette ?? []).flatMap((c) => c.members).length}`, label: 'colours in use' },
-    { value: `${accessibility.contrastFailures.length}`, label: 'text elements below WCAG AA contrast' },
-  ];
+  const { interactiveCount, withFocus, outlineRemovedWithoutReplacement } = analysis.interaction;
+  if (interactiveCount > 0) {
+    rows.push({
+      key: 'focus',
+      label: 'Visible keyboard focus',
+      explainer: 'Controls that show where you are when using the Tab key',
+      found: `${withFocus} of ${interactiveCount}`,
+      foundNote: outlineRemovedWithoutReplacement.length ? 'focus outline switched off in places' : '',
+      healthy: `all ${interactiveCount}`,
+      status: outlineRemovedWithoutReplacement.length ? 'at-risk' : withFocus / interactiveCount >= 0.6 ? 'strong' : 'needs-work',
+      annualCost: null,
+      selectors: [],
+    });
+  }
 
+  return rows.sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status] || (b.annualCost ?? 0) - (a.annualCost ?? 0));
+}
+
+function pagesOf(audit: Audit): PageSummary[] {
+  const { snapshot } = audit;
+  const refs = snapshot.pages ?? [{ url: snapshot.url, title: snapshot.title, elementCount: snapshot.rendered.elements.length }];
+  return refs.map((p) => ({ name: pageName(p), url: p.url, elements: p.elementCount }));
+}
+
+function hookFor(audit: Audit, painPoints: PainPoint[]): string | null {
+  const palette = audit.analysis.foundations.color.palette ?? [];
+  const copies = palette.reduce((n, c) => n + c.members.length - 1, 0);
+  const total = palette.reduce((n, c) => n + c.members.length, 0);
+  if (copies >= 2) {
+    return `Your product uses ${total} different colours, and ${copies} of them are near-identical copies of another colour that nobody could tell apart by eye.`;
+  }
+  const lookalikes = painPoints.find((p) => p.id.startsWith('component-') && p.title.includes('built differently'));
+  if (lookalikes) return `${lookalikes.title}. To a customer they’re the same thing; to your team they’re separate pieces to maintain.`;
+  const contrast = painPoints.find((p) => p.id === 'contrast');
+  if (contrast) return `${contrast.title}, below the accessibility standard many companies are now required to meet.`;
+  return painPoints[0]?.title ?? null;
+}
+
+export function summarise(audit: Audit, options: { clientName?: string; dismissed?: string[] } = {}): ExecutiveSummary {
+  const { savings, score, assumptions } = audit;
+  const money = (n: number) => formatMoney(n, assumptions.currency);
+  const clientName = options.clientName || 'your product';
+  const painPoints = findPainPoints(audit, options.dismissed);
+  const pages = pagesOf(audit);
+  const status = statusFor(score.overall);
+
+  const pagesPhrase =
+    pages.length === 1
+      ? `${pages[0]!.name === 'the home page' ? 'the home page' : `the ${pages[0]!.name} page`}`
+      : `${pages.length} pages (${pages.slice(0, 4).map((p) => p.name).join(', ')}${pages.length > 4 ? '…' : ''})`;
+
+  const stylesFound = savings.lines.reduce((n, l) => n + l.current, 0);
+  const metrics = metricRows(audit, painPoints);
   const headline =
     savings.annualDragCost > 0
-      ? `Inconsistency is costing an estimated ${money(savings.annualDragCost)} a year.`
-      : 'This product is built consistently. There is little design debt to recover.';
+      ? `Inconsistency is quietly costing your team about ${money(savings.annualDragCost)} a year.`
+      : `${clientName} is built consistently. There is very little design debt here.`;
   const subheadline =
     savings.annualDragCost > 0
-      ? `That is about ${Math.round(savings.annualDragHours).toLocaleString('en-US')} hours of design and engineering time. ` +
-        `A one-time cleanup of ${cleanupDuration} (~${money(savings.cleanupCost)}) recovers ~${money(savings.annualSavings)} a year` +
-        (savings.paybackMonths !== null ? ` and pays back in ${savings.paybackMonths} months.` : '.')
-      : 'Keep it that way with tokens and a component library as the product grows.';
+      ? `That is roughly ${Math.round(savings.annualDragHours)} hours of design and development time spent choosing between near-identical options, fixing small inconsistencies and editing values by hand. Tidying the design system up could give back around ${money(savings.annualSavings)} of that every year.`
+      : 'The findings below are small refinements rather than problems.';
 
   return {
+    clientName,
     score: score.overall,
-    grade: score.grade,
-    maturity: score.maturity,
+    status,
+    scoreExplainer: `We score consistency from 0 to 100, where 75 and above is a healthy design system. ${clientName} scores ${score.overall}, which we’d describe as ${SCORE_WORDS[status]}.`,
+    pages,
+    intro:
+      `We looked at ${pagesPhrase} of ${clientName} the way your customers see it, and took stock of how it is built: every colour, text size, gap and component. ` +
+      `Below, we walk you through what we found, where it shows up and what it is likely costing your team, in plain language and with suggestions you can act on.`,
+    hook: hookFor(audit, painPoints),
     headline,
     subheadline,
-    consolidation,
-    consolidationTotals: { current, recommended, reduction: current === 0 ? 0 : Math.round(((current - recommended) / current) * 100) },
-    areas,
-    weakest,
-    priorities: [...open].sort(byPriority).slice(0, 3).map(priorityFrom),
-    plan,
-    facts,
-    personWeeks,
-    cleanupDuration,
+    numbers: {
+      pages: pages.length,
+      stylesFound,
+      hoursLost: Math.round(savings.annualDragHours),
+      yearlyCost: savings.annualDragCost,
+      recoverable: savings.annualSavings,
+    },
+    painPoints,
+    metrics: metrics.filter((m) => m.status !== 'strong'),
+    healthyMetrics: metrics.filter((m) => m.status === 'strong'),
+    areas: score.areas
+      .filter((a) => a.applicable)
+      .map((a) => {
+        const s = statusFor(a.score);
+        return { key: a.key, label: a.label, score: a.score, status: s, impact: AREA_IMPACT[a.key][s] };
+      }),
+    glossary: GLOSSARY,
   };
 }

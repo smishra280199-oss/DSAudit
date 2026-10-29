@@ -5,7 +5,7 @@
 
 import { rgb, type RGB } from 'pdf-lib';
 
-function hex(value: string): RGB {
+export function hex(value: string): RGB {
   const n = parseInt(value.slice(1), 16);
   return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
 }

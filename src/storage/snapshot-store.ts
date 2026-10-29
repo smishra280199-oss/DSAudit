@@ -33,6 +33,7 @@ export class SnapshotStore {
       capturedAt: snapshot.capturedAt,
       score,
       elementCount: snapshot.rendered.elements.length,
+      ...(snapshot.pages ? { pageCount: snapshot.pages.length } : {}),
     };
     const index = (await this.list()).filter((m) => m.id !== snapshot.id);
     await this.kv.set({ [snapshotKey(snapshot.id)]: snapshot, [INDEX_KEY]: [meta, ...index] });

@@ -8,6 +8,7 @@ The panel and the exported report follow one visual language, taken from the ref
 - **Compact and legible.** 13px body, 12px secondary and 11px labels. Titles are semibold, never bold.
 - **Pills and soft corners.** Buttons, segmented controls and search fields are pills. Cards use a 12px radius, menus 12px, rows and items 8px.
 - **Tactile where you touch.** Toggles and slider thumbs are skeuomorphic, with a glossy knob in an inset track that turns green when on. Tooltips are dark and glossy, with keycaps for shortcuts.
+- **Status is a dot, not a fill.** Like the reference's "● Production", status shows as a small coloured dot beside a grey chip or label. Chips, numbers and cards stay neutral. There are no tinted pills, no coloured headline numbers, no one-sided accent strokes and no uppercase eyebrow labels.
 - **Lists lift on hover.** Rows are separated by hairlines. A hovered row becomes a raised white card and reveals its `⋯` menu. A selected row gets a magenta bar on its left edge.
 
 ## Tokens (light / dark)

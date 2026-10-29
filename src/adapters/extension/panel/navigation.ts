@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { AreaKey, FoundationKey } from '../../../inference/types';
 
-export type ViewKey = 'overview' | 'foundations' | 'components' | 'opportunities' | 'inspect' | 'history';
+export type ViewKey = 'overview' | 'foundations' | 'components' | 'opportunities' | 'inspect' | 'pages';
 
 /** Foundations view segments: the six foundations plus tokens. */
 export type FoundationSegment = FoundationKey | 'tokens';
@@ -43,5 +43,5 @@ export const VIEW_TITLES: Record<ViewKey, string> = {
   components: 'Components',
   opportunities: 'Opportunities',
   inspect: 'Inspect',
-  history: 'History',
+  pages: 'Pages',
 };

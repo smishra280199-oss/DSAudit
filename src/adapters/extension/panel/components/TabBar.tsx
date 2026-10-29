@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ClockIcon, ComponentsIcon, CursorIcon, GaugeIcon, SparkleIcon, SwatchIcon, Tooltip } from '../ui';
+import { ComponentsIcon, CursorIcon, GaugeIcon, PagesIcon, SparkleIcon, SwatchIcon, Tooltip } from '../ui';
 import { useNavigation, VIEW_TITLES, type ViewKey } from '../navigation';
 
 export const TABS: { view: ViewKey; icon: ReactNode }[] = [
@@ -8,11 +8,11 @@ export const TABS: { view: ViewKey; icon: ReactNode }[] = [
   { view: 'components', icon: <ComponentsIcon size={18} /> },
   { view: 'opportunities', icon: <SparkleIcon size={18} /> },
   { view: 'inspect', icon: <CursorIcon size={18} /> },
-  { view: 'history', icon: <ClockIcon size={18} /> },
+  { view: 'pages', icon: <PagesIcon size={18} /> },
 ];
 
 /** Bottom icon bar, as in the reference's narrow layouts. Keys 1–6 switch tabs. */
-export function TabBar({ badge }: { badge?: Partial<Record<ViewKey, number>> }) {
+export function TabBar() {
   const { view, go } = useNavigation();
   return (
     <nav className="tabbar" aria-label="Views">
@@ -26,7 +26,6 @@ export function TabBar({ badge }: { badge?: Partial<Record<ViewKey, number>> }) 
             onClick={() => go(tab.view)}
           >
             {tab.icon}
-            {badge?.[tab.view] ? <span className="tabbar__badge">{badge[tab.view]}</span> : null}
           </button>
         </Tooltip>
       ))}
