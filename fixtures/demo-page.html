@@ -1,0 +1,186 @@
+<!doctype html>
+<!--
+  A deliberately imperfect product page used by the preview harness and the
+  capture tests. It mixes tokens and literals, near-duplicate colours,
+  off-grid spacing, drifting button variants, a removed focus outline, a
+  low-contrast caption and an icon-only button without a name.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Acme Billing · Settings</title>
+    <style>
+      :root {
+        --color-text: #1a1a1a;
+        --color-muted: #6b7280;
+        --color-surface: #ffffff;
+        --color-canvas: #f5f6f8;
+        --color-brand: #5b3df5;
+        --color-border: #e5e7eb;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-4: 16px;
+        --space-6: 24px;
+        --radius-md: 8px;
+        --font-body: 14px;
+        --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
+        --unused-accent: #ff7a00;
+      }
+      [data-theme='dark'] {
+        --color-text: #f3f4f6;
+        --color-muted: #9ca3af;
+        --color-surface: #111827;
+        --color-canvas: #030712;
+      }
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, sans-serif;
+        font-size: var(--font-body);
+        color: var(--color-text);
+        background: var(--color-canvas);
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 22px;
+        background: #fff;
+        border-bottom: 1px solid #e6e7eb;
+      }
+      .topbar__brand { font-weight: 700; font-size: 17px; }
+      .topbar nav a { color: #5a3cf4; margin-left: 18px; text-decoration: none; font-weight: 500; }
+      .topbar nav a:hover { text-decoration: underline; }
+      main { max-width: 860px; margin: 0 auto; padding: var(--space-6); }
+      h1 { font-size: 28px; margin: 0 0 6px; }
+      h2 { font-size: 19px; margin: 0 0 var(--space-2); }
+      .lede { color: var(--color-muted); margin: 0 0 var(--space-6); font-size: 15px; }
+      .card {
+        background: var(--color-surface);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        padding: var(--space-6);
+        margin-bottom: var(--space-4);
+      }
+      .card--legacy {
+        background: #fff;
+        border-radius: 10px;
+        border: 1px solid #e4e6ea;
+        padding: 22px;
+        margin-bottom: 18px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+      }
+      .field { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-4); }
+      .field label { font-size: 13px; font-weight: 500; }
+      .field input {
+        padding: var(--space-2) 12px;
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        font-size: 14px;
+      }
+      .field input:focus { outline: none; }
+      .hint { font-size: 12px; color: #b4b4b4; }
+      .row { display: flex; gap: 10px; align-items: center; }
+      .btn {
+        padding: var(--space-2) var(--space-4);
+        border-radius: var(--radius-md);
+        font-size: 14px;
+        font-weight: 600;
+        border: 0;
+        cursor: pointer;
+        transition: background 150ms ease;
+      }
+      .btn:focus-visible { box-shadow: 0 0 0 3px rgba(91, 61, 245, 0.4); outline: none; }
+      .btn--primary { background: var(--color-brand); color: #fff; }
+      .btn--primary:hover { background: #4a2ee0; }
+      .btn--secondary { background: #f1f2f4; color: #1a1a1a; }
+      .btn--danger { background: #e5484d; color: #fff; transition: background 200ms ease; }
+      .btn-old { background: #5c3ef5; color: #fff; padding: 9px 15px; border-radius: 7px; border: 0; font-size: 14px; font-weight: 600; }
+      .btn-ghost { background: transparent; color: #5b3df5; border: 1px solid #5b3df5; padding: 7px 14px; border-radius: 6px; font-size: 13px; }
+      .icon-btn {
+        width: 32px; height: 32px; border-radius: 50%; border: 1px solid #e5e7eb; background: #fff; display: grid; place-items: center;
+      }
+      .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+      .badge--ok { background: #e7f8ec; color: #1f8a3b; }
+      .badge--warn { background: #fff4e0; color: #a35f00; }
+      .badge--odd { background: #fff5e1; color: #a15d00; font-size: 11px; }
+      .plan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+      .plan__item { background: #fafafa; border-radius: 12px; padding: 18px; border: 1px solid #ececec; }
+      .plan__price { font-size: 26px; font-weight: 700; }
+      .plan__note { font-size: 13px; color: #6a7280; }
+      .avatar { width: 36px; height: 36px; border-radius: 50%; background: #d9d6fe; display: inline-block; }
+      footer { text-align: center; color: #9a9a9a; font-size: 12px; padding: 30px; }
+      .toast { position: fixed; right: 20px; bottom: 20px; z-index: 999; background: #1a1a1a; color: #fff; padding: 10px 14px; border-radius: 8px; }
+      .menu { position: relative; z-index: 50; }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <span class="topbar__brand">Acme Billing</span>
+      <nav class="menu">
+        <a href="#">Overview</a>
+        <a href="#">Invoices</a>
+        <a href="#">Settings</a>
+      </nav>
+    </header>
+    <main>
+      <h1>Workspace settings</h1>
+      <p class="lede">Manage your plan, billing details and team access.</p>
+
+      <section class="card">
+        <h2>Billing details</h2>
+        <div class="field">
+          <label for="company">Company name</label>
+          <input id="company" value="Acme Inc." />
+        </div>
+        <div class="field">
+          <label for="email">Billing email</label>
+          <input id="email" type="email" value="billing@acme.test" />
+          <span class="hint">Invoices are sent to this address.</span>
+        </div>
+        <div class="row">
+          <button class="btn btn--primary">Save changes</button>
+          <button class="btn btn--secondary">Cancel</button>
+          <button class="icon-btn"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="2" /></svg></button>
+        </div>
+      </section>
+
+      <section class="card--legacy">
+        <h2>Plan</h2>
+        <div class="plan">
+          <div class="plan__item">
+            <span class="badge badge--ok">Current</span>
+            <div class="plan__price">$19</div>
+            <div class="plan__note">Per seat, billed monthly</div>
+          </div>
+          <div class="plan__item">
+            <span class="badge badge--warn">Popular</span>
+            <div class="plan__price">$39</div>
+            <div class="plan__note">Per seat, billed monthly</div>
+          </div>
+          <div class="plan__item">
+            <span class="badge badge--odd">Custom</span>
+            <div class="plan__price">Talk to us</div>
+            <div class="plan__note">Volume pricing</div>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 18px">
+          <button class="btn-old">Upgrade plan</button>
+          <button class="btn-ghost">Compare plans</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Team</h2>
+        <div class="row" style="margin-bottom: 12px">
+          <span class="avatar"></span>
+          <span class="avatar"></span>
+          <span class="avatar"></span>
+          <a href="#" style="color: #5b3df5; font-size: 13px">Invite people</a>
+        </div>
+        <button class="btn btn--danger">Remove workspace</button>
+      </section>
+    </main>
+    <footer>© 2026 Acme Inc. · Terms · Privacy</footer>
+    <div class="toast">Saved</div>
+  </body>
+</html>

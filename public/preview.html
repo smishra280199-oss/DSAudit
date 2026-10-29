@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>System Audit · Preview</title>
+    <link rel="stylesheet" href="preview.css" />
+    <style>
+      body { display: flex; height: 100vh; overflow: hidden; }
+      #page { flex: 1; border: 0; height: 100%; background: #fff; }
+      #root { width: 400px; flex: none; height: 100%; overflow: auto; position: relative; transform: translateZ(0);
+              border-left: 1px solid var(--border); }
+    </style>
+  </head>
+  <body>
+    <iframe id="page" src="demo-page.html" title="Page under audit"></iframe>
+    <div id="root"></div>
+    <script src="preview.js"></script>
+  </body>
+</html>
