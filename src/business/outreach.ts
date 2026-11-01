@@ -136,7 +136,7 @@ export function outreachKit({ audit, summary, business, branding, audience, reci
   const second = summary.painPoints[1] ?? null;
   const win = business.quickWins[0] ?? null;
   const change = business.typicalChanges[0] ?? null;
-  const speedup = Math.round(audit.assumptions.systemSpeedup * 100);
+  const speedup = Math.round(business.effectiveSpeedup * 100);
   const yearly = business.yearly;
   // No hours or money for the fixes: in a first message they read as a quote, and a low one.
   const winLine = win
@@ -159,7 +159,8 @@ export function outreachKit({ audit, summary, business, branding, audience, reci
       hi,
       `I went through ${looked} the way your customers see it, and took stock of how it's built: every colour, text size, gap and component.`,
       `One thing stood out: ${lowerFirst(hook)}`,
-      `On our numbers, inconsistency like this costs a team your size around ${yearly.inconsistencyHours} hours a year, and each new screen takes about ${speedup}% longer than it would with a shared system. All in, roughly ${money(yearly.cost)} a year.`,
+      `We estimate that for a product team of about ${audit.assumptions.contributors} people, inconsistency like this costs around ${yearly.inconsistencyHours} hours a year` +
+        (speedup >= 5 ? `, and each new screen takes about ${speedup}% longer than it would with a shared system. All in, roughly ${money(yearly.cost)} a year.` : ` (roughly ${money(yearly.cost)}).`),
       winLine,
       offer,
     ];

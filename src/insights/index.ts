@@ -219,7 +219,8 @@ function hookFor(audit: Audit, painPoints: PainPoint[]): string | null {
   if (lookalikes) return `${lookalikes.title}. To a customer they’re the same thing; to your team they’re separate pieces to maintain.`;
   const contrast = painPoints.find((p) => p.id === 'contrast');
   if (contrast) return `${contrast.title}, below the accessibility standard many companies are now required to meet.`;
-  return painPoints[0]?.title ?? null;
+  // Only a finding worth acting on makes the opening line; minor polish never does.
+  return painPoints.find((p) => p.severity !== 'low')?.title ?? null;
 }
 
 export function summarise(audit: Audit, options: { clientName?: string; dismissed?: string[] } = {}): ExecutiveSummary {
@@ -246,7 +247,7 @@ export function summarise(audit: Audit, options: { clientName?: string; dismisse
   const realised = (n: number | null) => (n ? Math.round(n * assumptions.realisationRate) : null);
   const headline =
     savings.annualDragCost > 0
-      ? `Inconsistency is quietly costing your team about ${money(savings.annualDragCost)} a year.`
+      ? `We estimate inconsistency is costing your team about ${money(savings.annualDragCost)} a year.`
       : `${clientName} is built consistently. There is very little design debt here.`;
   const subheadline =
     savings.annualDragCost > 0

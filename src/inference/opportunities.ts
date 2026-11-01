@@ -146,7 +146,8 @@ function foundationOpportunities({ foundations }: OpportunityInput): Opportunity
         id: 'spacing-off-scale',
         kind: 'off-scale-spacing',
         area: 'spacing',
-        severity: bySeverity(1 - spacing.scale.fit, 0.3, 0.1),
+        // Off-grid spacing is polish, not a defect: it never ranks as high.
+        severity: 1 - spacing.scale.fit >= 0.1 ? 'medium' : 'low',
         title: `Move ${plural(off.length, 'spacing value')} onto the ${spacing.scale.value}px grid`,
         detail: `${plural(usage, 'use')} of spacing ${verb(usage, 'doesn’t', 'don’t')} fit the ${spacing.scale.value}px base unit that explains ${Math.round(spacing.scale.fit * 100)}% of the page.`,
         fix: `Round each to the nearest multiple of ${spacing.scale.value}px, using spacing tokens.`,

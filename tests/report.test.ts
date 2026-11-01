@@ -31,7 +31,7 @@ describe('client reports', () => {
     const html = auditToHtml(audit, options);
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('Acme &amp; Co');
-    expect(html).toContain('Inconsistency is quietly costing your team');
+    expect(html).toContain('We estimate inconsistency is costing your team');
     expect(html).toContain('Where the cost comes from');
     expect(html).toMatch(/Part 1<\/p><h2>The problems[\s\S]*Part 2<\/p><h2>The fixes[\s\S]*Part 3<\/p><h2>What’s working well/);
     expect(html).not.toMatch(/payback|one-time cleanup|cleanup cost/i);

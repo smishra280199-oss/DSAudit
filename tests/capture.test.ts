@@ -74,3 +74,17 @@ describe('CSS helpers', () => {
     expect(specificity('a::before')).toEqual([0, 0, 2]);
   });
 });
+
+describe('focus rules', () => {
+  it('ignores :focus:not(:focus-visible) and rules that match nothing on the page', () => {
+    document.open();
+    document.write(`<style>
+      button:focus:not(:focus-visible){outline:0}
+      .carousel-control:focus{outline:0}
+      .link-btn:focus{outline:none}
+    </style><button>Keep</button><button class="link-btn">Remove</button>`);
+    document.close();
+    const captured = createCaptureApi(document, { onInspectPicked: () => {}, onInspectExit: () => {} }).capture([]);
+    expect(captured.authored.interaction.outlineRemovedWithoutReplacement.map((r) => r.selector)).toEqual(['.link-btn:focus']);
+  });
+});

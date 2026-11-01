@@ -150,10 +150,12 @@ function businessCase(l: Layout, { audit, options }: Context): void {
   const b = buildBusinessCase(audit, options.dismissed);
   if (b.avoidable.likely <= 0 && b.oneTimeFix.hours <= 0) return;
   const hrs = (n: number) => `${Math.round(n).toLocaleString('en-US')} h`;
-  const speedup = Math.round(audit.assumptions.systemSpeedup * 100);
+  const speedup = Math.round(b.effectiveSpeedup * 100);
   const tiles = [
     { eyebrow: 'A design system would have saved', value: hrs(b.avoidable.likely), caption: `${b.teamTime}; likely ${hrs(b.avoidable.low)} to ${hrs(b.avoidable.high)}` },
-    { eyebrow: 'Every new screen', value: `${speedup}% faster`, caption: `with shared tokens and components: about ${hrs(b.yearly.newScreenHours)} a year` },
+    speedup >= 5
+      ? { eyebrow: 'Every new screen', value: `${speedup}% faster`, caption: `with shared tokens and components: about ${hrs(b.yearly.newScreenHours)} a year` }
+      : { eyebrow: 'New screens', value: 'Already fast', caption: 'Your shared styles already do most of the work' },
     // Break-even without the fix hours: the report shows the return, never a figure that reads as a quote.
     { eyebrow: 'Closing the gaps', value: b.breakEvenMonths ? `${b.breakEvenMonths} months` : '—', caption: b.breakEvenMonths ? 'until the cleanup pays for itself' : 'Nothing urgent to fix' },
   ];

@@ -16,6 +16,12 @@ export interface ElementView {
   subtreeHasLabel: boolean;
 }
 
+/** Screen-reader-only text (the 1×1 px clip pattern): present in the DOM, invisible on screen. */
+export function isVisuallyHidden({ el }: ElementView): boolean {
+  // Both sides: a 1px-tall divider is visible, a 1×1 clipped box is not. (jsdom tests have no layout: 0×0.)
+  return el.rect.w <= 1 && el.rect.h <= 1 && (el.rect.w > 0 || el.rect.h > 0 || el.classes.some((c) => /sr-only|visually-hidden|screen-reader/i.test(c)));
+}
+
 const LABEL_ATTRS = ['aria-label', 'aria-labelledby', 'title', 'alt'];
 
 export function viewElements(snapshot: PageSnapshot): ElementView[] {

@@ -127,7 +127,7 @@ export function impactEffortMatrix(ranked: RankedOpportunity[]): Record<Impact, 
 // ── The business case ───────────────────────────────────────────────────
 
 export interface TimeCause {
-  key: 'variants' | 'copies' | 'decisions' | 'focus';
+  key: 'variants' | 'copies' | 'decisions';
   label: string;
   /** How the hours were worked out, for the tooltip and the report. */
   basis: string;
@@ -151,6 +151,14 @@ export interface TypicalChange {
 
 export interface BusinessCase {
   confidence: ConfidenceLevel;
+  /**
+   * How far the product is from a mature system, 0–1. A product that already
+   * has one gains nothing more from "having a design system", so the new-screen
+   * speed-up is scaled by this gap.
+   */
+  maturityGap: number;
+  /** The speed-up this product would actually see on new screens: speed-up × gap. */
+  effectiveSpeedup: number;
   /** Work a design system would have avoided so far, in hours. */
   avoidable: Range;
   avoidableCost: number;
@@ -212,18 +220,23 @@ function round(n: number): number {
 
 /** Hard-coded declarations of a category. */
 function literalCount(audit: Audit, category: DeclarationCategory): number {
-  return audit.snapshot.authored.declarations.filter((d) => d.category === category && d.kind === 'literal').length;
+  return applied(audit).filter((d) => d.category === category && d.kind === 'literal').length;
+}
+
+/** Declarations that style something on the captured pages; framework rules nobody uses don't count as edits. */
+function applied(audit: Audit) {
+  return audit.snapshot.authored.declarations.filter((d) => d.matchCount > 0 && d.mediaMatches);
 }
 
 function typicalChanges(audit: Audit): TypicalChange[] {
-  const { analysis, snapshot } = audit;
+  const { analysis } = audit;
   const changes: TypicalChange[] = [];
 
   // The brand colour: the most used non-neutral colour, and every hand-typed copy of it.
   const brand = (analysis.foundations.color.palette ?? []).find((c) => !c.neutral);
   const brandRgb = brand ? parseColor(brand.hex) : null;
   if (brandRgb) {
-    const today = snapshot.authored.declarations.filter((d) => {
+    const today = applied(audit).filter((d) => {
       if (d.category !== 'color' || d.kind !== 'literal') return false;
       const c = parseColor(d.value);
       return c !== null && deltaE(c, brandRgb) < 2.3;
@@ -231,9 +244,11 @@ function typicalChanges(audit: Audit): TypicalChange[] {
     if (today > 1) changes.push({ label: 'Change the brand colour', today, after: 1, unit: 'edits' });
   }
 
+  // Primary, secondary and danger are deliberate: only styles beyond what a system needs count.
   const buttons = analysis.components.find((c) => c.kind === 'button');
-  if (buttons && buttons.variants.length > 1) {
-    changes.push({ label: 'Restyle every button', today: buttons.variants.length, after: 1, unit: 'separate button styles to edit' });
+  const buttonLine = audit.savings.lines.find((l) => l.key === 'component-button');
+  if (buttons && buttonLine && buttonLine.excess > 0) {
+    changes.push({ label: 'Restyle every button', today: buttons.variants.length, after: buttonLine.recommended, unit: 'separate button styles to edit' });
   }
 
   const spacing = literalCount(audit, 'spacing');
@@ -280,7 +295,6 @@ export function buildBusinessCase(audit: Audit, dismissed: string[] = []): Busin
     const recommended = savings.lines.find((l) => l.key === lineKey)?.recommended ?? component.variants.length;
     rareInstances += component.variants.slice(recommended).reduce((n, v) => n + v.count, 0);
   }
-  const focusMissing = Math.max(0, analysis.interaction.interactiveCount - analysis.interaction.withFocus);
 
   const causes: TimeCause[] = [
     {
@@ -301,12 +315,6 @@ export function buildBusinessCase(audit: Audit, dismissed: string[] = []): Busin
       basis: `${savings.excessValues} unnecessary colours, sizes and gaps × ${e.oneOffDecision} h each, per contributor`,
       hours: savings.excessValues * e.oneOffDecision * Math.max(1, a.contributors / 2),
     },
-    {
-      key: 'focus',
-      label: 'Missing focus states',
-      basis: `${Math.round(focusMissing * scale)} controls without a designed focus state × ${e.focusState} h each`,
-      hours: focusMissing * scale * e.focusState,
-    },
   ]
     .map((c) => ({ ...c, hours: round(c.hours) }))
     .filter((c) => c.hours > 0)
@@ -319,7 +327,8 @@ export function buildBusinessCase(audit: Audit, dismissed: string[] = []): Busin
   const ranked = rankOpportunities(audit, dismissed);
   const fixHours = ranked.reduce((n, r) => n + r.hours, 0);
 
-  const newScreenHours = round(a.newScreensPerYear * a.hoursPerNewScreen * a.systemSpeedup);
+  const gap = maturityGap(audit.score.overall);
+  const newScreenHours = round(a.newScreensPerYear * a.hoursPerNewScreen * a.systemSpeedup * gap);
   const inconsistencyHours = round(savings.annualDragHours);
   const yearlyHours = inconsistencyHours + newScreenHours;
   const benefitHours = round(savings.annualDragHours * a.realisationRate + newScreenHours);
@@ -335,6 +344,8 @@ export function buildBusinessCase(audit: Audit, dismissed: string[] = []): Busin
 
   return {
     confidence,
+    maturityGap: gap,
+    effectiveSpeedup: a.systemSpeedup * gap,
     avoidable: { low: round(likely * lo), likely, high: round(likely * hi) },
     avoidableCost: likely * a.hourlyRate,
     causes,
@@ -353,6 +364,11 @@ export function buildBusinessCase(audit: Audit, dismissed: string[] = []): Busin
     nextSteps: { items: steps, hours: steps.reduce((n, r) => n + r.hours, 0) },
     highlights: highlights(audit, ranked),
   };
+}
+
+/** 0 at a score of 85 or more (already systematic), 1 at 25 or less. */
+export function maturityGap(score: number): number {
+  return Math.max(0, Math.min(1, (85 - score) / 60));
 }
 
 /** "$95/h · 12 screens · 6 new a year · 35% faster with a system". */

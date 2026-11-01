@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runAudit, withAssumptions } from '../src/audit';
-import { buildBusinessCase, consistencyLevel, effortSize, rankOpportunities, teamTime } from '../src/business';
+import { buildBusinessCase, consistencyLevel, effortSize, maturityGap, rankOpportunities, teamTime } from '../src/business';
 import { leadFit, outreachKit, sendChecklist } from '../src/business/outreach';
 import { summarise } from '../src/insights';
 import { EMPTY_BRANDING } from '../src/report/branding';
@@ -57,7 +57,7 @@ describe('business case', () => {
   it('quotes the same yearly inconsistency figure as the client report', () => {
     expect(b.yearly.inconsistencyHours).toBe(Math.round(audit.savings.annualDragHours));
     const a = DEFAULT_ASSUMPTIONS;
-    expect(b.yearly.newScreenHours).toBe(Math.round(a.newScreensPerYear * a.hoursPerNewScreen * a.systemSpeedup));
+    expect(b.yearly.newScreenHours).toBe(Math.round(a.newScreensPerYear * a.hoursPerNewScreen * a.systemSpeedup * maturityGap(audit.score.overall)));
     expect(b.yearly.hours).toBe(b.yearly.inconsistencyHours + b.yearly.newScreenHours);
   });
 

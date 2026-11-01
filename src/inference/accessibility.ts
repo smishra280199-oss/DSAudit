@@ -4,7 +4,7 @@
  */
 
 import { evaluateContrast, type BackdropLayer } from '../shared/contrast';
-import { px, type ElementView } from './elements';
+import { isVisuallyHidden, px, type ElementView } from './elements';
 import type { AccessibilityAnalysis, ContrastIssue } from './types';
 
 const MAX_TEXT_CHECKS = 2_000;
@@ -18,6 +18,15 @@ function backdrop(views: ElementView[], index: number): BackdropLayer[] {
   return layers;
 }
 
+/** WCAG 1.4.3 exempts inactive controls; text nobody can see can't fail contrast. */
+function exemptFromContrast(views: ElementView[], index: number): boolean {
+  for (let i = index; i >= 0; i = views[i]!.el.parent) {
+    const { attrs } = views[i]!.el;
+    if (attrs.disabled !== undefined || attrs['aria-disabled'] === 'true' || attrs['aria-hidden'] === 'true') return true;
+  }
+  return isVisuallyHidden(views[index]!);
+}
+
 function isControl({ el }: ElementView): boolean {
   return el.tag === 'button' || el.attrs.role === 'button' || (el.tag === 'a' && el.attrs.href !== undefined);
 }
@@ -29,7 +38,7 @@ export function analyseAccessibility(views: ElementView[]): AccessibilityAnalysi
   for (const view of views) {
     if (!view.el.text || textChecked >= MAX_TEXT_CHECKS) continue;
     const { color, fontSize, fontWeight } = view.styles;
-    if (!color) continue;
+    if (!color || exemptFromContrast(views, view.el.index)) continue;
     textChecked += 1;
     const result = evaluateContrast(color, backdrop(views, view.el.index), px(fontSize) ?? 16, parseInt(fontWeight ?? '400', 10));
     if (result && !result.passesAA) failures.push({ ...result, selector: view.el.selector, text: view.el.text });
