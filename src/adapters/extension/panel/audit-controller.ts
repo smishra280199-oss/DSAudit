@@ -8,7 +8,7 @@ import { compareAudits, runAudit, withAssumptions, type Audit } from '../../../a
 import { mergeSnapshots } from '../../../audit/merge';
 import { selectorsForPage } from '../../../shared/page-scope';
 import type { InspectResult } from '../../../inspect/types';
-import type { SavingsAssumptions } from '../../../savings';
+import { DEFAULT_ASSUMPTIONS, type SavingsAssumptions } from '../../../savings';
 import { capturability, type CapturabilityReason } from '../../../shared/restricted';
 import type { PageSnapshot, SnapshotMeta } from '../../../shared/snapshot';
 import { defaultClientName, EMPTY_BRANDING, type ClientReportOptions, type ReportBranding } from '../../../report/branding';
@@ -338,6 +338,18 @@ export class AuditController {
     const audit = this.state.audit ? withAssumptions(this.state.audit, assumptions) : null;
     this.set({ assumptions, audit });
     await saveAssumptions(this.bridge.storage, assumptions);
+  }
+
+  async resetAssumptions(): Promise<void> {
+    await this.updateAssumptions(DEFAULT_ASSUMPTIONS);
+  }
+
+  /** Whether the user has tuned "Your team's numbers" away from the defaults. */
+  assumptionsCustomised(): boolean {
+    const a = this.state.assumptions;
+    if (!a) return false;
+    const differs = <T extends object>(x: T, y: T) => (Object.keys(y) as (keyof T)[]).some((k) => typeof y[k] !== 'object' && x[k] !== y[k]);
+    return differs(a, DEFAULT_ASSUMPTIONS) || differs(a.effort, DEFAULT_ASSUMPTIONS.effort);
   }
 
   // ── Report details ─────────────────────────────────────────────────────

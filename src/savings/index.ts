@@ -30,7 +30,47 @@ export interface SavingsAssumptions {
   rethemesPerYear: number;
   /** Share of the drag a cleanup actually recovers, 0–1. */
   realisationRate: number;
+
+  // ── "Your team's numbers": the business case (business/index.ts) ──
+  /** Screens in the whole product; never fewer than the pages captured. */
+  screens: number;
+  newScreensPerYear: number;
+  /** Design and build hours for one new screen today. */
+  hoursPerNewScreen: number;
+  /** How much faster UI work gets with a mature system, 0–0.9. */
+  systemSpeedup: number;
+  /** Hours of effort per item. */
+  effort: EffortPerItem;
 }
+
+export interface EffortPerItem {
+  /** Building one shared control (e.g. a Button component) properly. */
+  buildControl: number;
+  /** Designing, building and reviewing one extra variant of a control. */
+  extraVariant: number;
+  /** One hand-built copy of something that should have been a component. */
+  handBuiltCopy: number;
+  /** One one-off style decision (a colour, size or gap chosen by hand). */
+  oneOffDecision: number;
+  /** Adding one missing focus state. */
+  focusState: number;
+  smallFix: number;
+  mediumFix: number;
+  largeFix: number;
+}
+
+export const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'CAD', 'AUD', 'JPY', 'CHF'] as const;
+
+export const DEFAULT_EFFORT: EffortPerItem = {
+  buildControl: 6,
+  extraVariant: 3,
+  handBuiltCopy: 0.5,
+  oneOffDecision: 0.25,
+  focusState: 0.25,
+  smallFix: 2,
+  mediumFix: 8,
+  largeFix: 24,
+};
 
 export const DEFAULT_ASSUMPTIONS: SavingsAssumptions = {
   hourlyRate: 85,
@@ -41,7 +81,18 @@ export const DEFAULT_ASSUMPTIONS: SavingsAssumptions = {
   minutesPerLiteralEdit: 3,
   rethemesPerYear: 1,
   realisationRate: 0.6,
+  screens: 12,
+  newScreensPerYear: 6,
+  hoursPerNewScreen: 40,
+  systemSpeedup: 0.35,
+  effort: DEFAULT_EFFORT,
 };
+
+/** Fills in anything missing from stored or imported assumptions. */
+export function normaliseAssumptions(stored: Partial<SavingsAssumptions> | null | undefined): SavingsAssumptions {
+  const merged = { ...DEFAULT_ASSUMPTIONS, ...(stored ?? {}) };
+  return { ...merged, effort: { ...DEFAULT_EFFORT, ...(stored?.effort ?? {}) } };
+}
 
 /** The upper bound on perceptually distinct colours in a systematic palette. */
 export const PALETTE_TARGET = 20;

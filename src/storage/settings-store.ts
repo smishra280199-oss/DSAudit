@@ -1,13 +1,13 @@
 /** Persists user settings: savings assumptions and report branding. */
 
-import { DEFAULT_ASSUMPTIONS, type SavingsAssumptions } from '../savings';
+import { normaliseAssumptions, type SavingsAssumptions } from '../savings';
 import { EMPTY_BRANDING, type ReportBranding } from '../report/branding';
 import type { KeyValueStore } from './kv';
 
 const KEY = 'settings:assumptions';
 
 export async function loadAssumptions(kv: KeyValueStore): Promise<SavingsAssumptions> {
-  return { ...DEFAULT_ASSUMPTIONS, ...((await kv.get<Partial<SavingsAssumptions>>(KEY)) ?? {}) };
+  return normaliseAssumptions(await kv.get<Partial<SavingsAssumptions>>(KEY));
 }
 
 export async function saveAssumptions(kv: KeyValueStore, assumptions: SavingsAssumptions): Promise<void> {

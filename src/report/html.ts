@@ -13,7 +13,7 @@ import { formatMoney, formatMoneyShort } from '../savings';
 import type { ClientReportOptions } from './branding';
 import { formatDate } from './format';
 
-const escape = (s: string) =>
+export const escape = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 const PRIORITY: Record<Severity, { label: string; dot: string }> = {
@@ -22,7 +22,7 @@ const PRIORITY: Record<Severity, { label: string; dot: string }> = {
   low: { label: 'Nice to have', dot: 'muted' },
 };
 
-const STYLES = `
+export const STYLES = `
 :root{--canvas:#f6f6f6;--surface:#fff;--sunken:#f1f1f1;--border:#ebebeb;--text:#171717;--text-2:#6b6b6b;--text-3:#a3a3a3;
 --danger:#e5484d;--warning:#c98207;--success:#2a9d3e;--shadow:0 0 0 1px rgba(0,0,0,.04),0 1px 2px rgba(0,0,0,.04);color-scheme:light}
 @media screen and (prefers-color-scheme:dark){:root{--canvas:#0e0e0e;--surface:#191919;--sunken:#121212;--border:#262626;--text:#ededed;--text-2:#a1a1a1;
