@@ -8,7 +8,7 @@ import { auditToMarkdown } from '../../../report/markdown';
 import type { ClientReportOptions } from '../../../report/branding';
 import { auditToPdf } from '../../../report/pdf';
 
-function download(filename: string, content: string | Uint8Array, type: string): void {
+export function download(filename: string, content: string | Uint8Array, type: string): void {
   const url = URL.createObjectURL(new Blob([content as BlobPart], { type }));
   const link = Object.assign(document.createElement('a'), { href: url, download: filename });
   link.click();

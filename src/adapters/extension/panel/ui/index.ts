@@ -16,3 +16,4 @@ export { Slider } from './Slider';
 export { TextField } from './TextField';
 export { Toggle } from './Toggle';
 export { Kbd, Tooltip } from './Tooltip';
+export { NumberField } from './NumberField';

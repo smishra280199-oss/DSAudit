@@ -68,6 +68,8 @@ audit    ─▶ insights/findings.ts   pain points: their own elements, colours 
          ─▶ report/pdf | html | markdown   three renderers of the same ExecutiveSummary
 ```
 
+`business/index.ts` builds the business case on top of the same audit: avoidable hours so far by cause (extra variants, hand-built copies, one-off style decisions, missing focus states), the yearly cost (the report's inconsistency figure plus slower new screens), the one-time fix from effort sizes, break-even, the cost of a typical change, and opportunities ranked by impact then effort with quick wins flagged. The Report tab, the executive one-pager, the detailed Markdown and page 1 of the PDF all read it. `business/outreach.ts` is for the sender only: lead fit, the angle to lead with, message drafts and a ready-to-send checklist.
+
 The report deliberately contains only the client's problems and what they cost: no cleanup estimates, no prices. Every money figure traces back to a stock-take line. The wording lives in `insights/` next to the data it describes. `insights/describe.ts` turns elements into things a reader recognises: "the “Upgrade plan” button on /pricing", "a purple". The PDF uses only patterns from the reference boards: title and subtitle headings, white hairline cards, grey table header bands, grey chips, and status shown as a coloured dot.
 
 ## Testing

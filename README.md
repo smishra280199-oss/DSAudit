@@ -35,15 +35,22 @@ The one-time setup for both is in [docs/RELEASING.md](docs/RELEASING.md).
 ## Using it
 
 1. **Capture page** (or press `C` in the panel). The first time, Chrome asks for optional access to all sites. Without it, only the tab you opened the panel on can be read and cross-origin stylesheets are skipped.
-2. **Several pages?** Open **Pages** (key `6`) and press **Add this page** on each page as you click through the site. Then press **Audit N pages**. Findings that only show up across pages, such as a brand colour in four shades or headings built differently on two pages, are then caught. Findings say which page they were seen on, and highlighting works on whichever of those pages is open.
+2. **Several pages?** Open **Pages** (key `7`) and press **Add this page** on each page as you click through the site. Then press **Audit N pages**. Findings that only show up across pages, such as a brand colour in four shades or headings built differently on two pages, are then caught. Findings say which page they were seen on, and highlighting works on whichever of those pages is open.
 3. **Overview**: what the client will read. It shows the headline cost, four key numbers, "something they may not know", the findings in report order and the stock-take. Use a finding's menu to leave it out of the report.
-4. **Foundations**, **Components**, **Opportunities** and **Inspect**: the detailed evidence for you. Select any value to highlight it on the page.
+4. **Opportunities** (key `4`): every change ordered by impact, with area chips, an impact filter and an impact/effort matrix where quick wins (high or medium impact, small effort) are outlined. Open one for why it matters, an at-a-glance grid (type of change, impact, effort, affected, confidence, based on), the proposed change and where it happens. **Copy as task** puts it on the clipboard as Markdown for a ticket or an AI agent.
+5. **Report** (key `5`): the business case, in three versions:
+   - **Executive summary**: what a design system would have saved so far (hours, team-time equivalent, likely range and confidence), yearly cost, one-time fix and break-even, simplify and reuse, where the time went, return on closing the gaps, the cost of a typical change, what we found and the recommended next steps. Copy it, or download a printable one-pager (HTML) or Markdown.
+   - **Detailed report**: every opportunity as a task with its evidence and the audit's limits. Copy it, or download Markdown or the raw JSON.
+   - **Outreach** (only you see this): a lead-fit score with reasons and the angle most likely to land, a ready-to-send checklist, and first drafts (subject lines, email, LinkedIn message, follow-up) for a founder, design lead or engineering lead, built from their own product. Drafts never quote a price or an hour figure for the fixes.
+   - **Your team's numbers**: cost per hour, currency, screens in the product, new screens a year, hours per new screen, design-system speed-up, visual changes a year, and effort per item. Every change recalculates the page and is saved.
+6. **Foundations**, **Components** and **Inspect**: the detailed evidence for you. Select any value to highlight it on the page.
 
 **Client report.** Set your agency, name, contact details and an optional personal note once under `⋯` → *Report details…*. The client name comes from the page and can be changed per site. Then press **Download PDF report**. The report contains:
 
 - **Page 1, the whole picture at a glance:**
   - a short personal note and the headline cost;
   - four key numbers: yearly cost, could be saved, hours lost, consistency score;
+  - the business case: what a design system would have saved, how much faster new screens get, and how many months until the cleanup pays for itself (never the fix hours, which would read as a quote);
   - two charts: *where the cost comes from* and *health by area*;
   - "Something you may not know".
 - **Part 1, the problems.** A problem map grouped into tokens and styles, components and elements, with the number of problems, places affected and cost for each group. Then a summary table (problem, what it affects, places, cost a year, priority) and one compact card per problem: three headline numbers, the evidence (swatches, sizes, contrast samples, look-alike components) and where it was seen.
@@ -63,6 +70,8 @@ src/
   inference/     Snapshot → analysis: foundations, components, tokens, a11y, opportunities
   scoring/       Area scores, AREA_WEIGHTS, grade
   savings/       Planning estimate: line items per redundant style, re-theme cost, cleanup
+  business/      The business case (avoidable hours, yearly cost, break-even, ranked
+                 opportunities, quick wins) and outreach (lead fit, message drafts)
   insights/      The client story: pain points with real examples (findings.ts), plain-language
                  descriptions (describe.ts), stock-take and glossary (index.ts, narrative.ts)
   audit/         Bundles snapshot + analysis + score + savings; merges pages; compares audits
@@ -100,4 +109,4 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit together
 - Component recognition, scale inference and every score are **heuristics**.
 - Inspect **ignores hover and focus rules** (the pointer is always on the element while picking), **approximates specificity**, doesn't model **cascade layers**, and its contrast is **approximate over background images**.
 - Token suggestions match on **value**, then rank by **role** (a token already used for the same kind of property, with colours split into text, background and border). A suggestion marked "Value only" may be a token meant for a different job.
-- Savings figures are **planning estimates** built on editable assumptions.
+- Savings figures are **planning estimates** built on editable assumptions. Business-case figures carry a likely range that widens as capture confidence drops; per-instance work is scaled from the pages captured to the screens in the product.

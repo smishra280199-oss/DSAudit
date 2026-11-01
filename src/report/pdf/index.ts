@@ -12,6 +12,7 @@
 
 import { PDFDocument, rgb, StandardFonts, type RGB } from 'pdf-lib';
 import type { Audit } from '../../audit';
+import { buildBusinessCase } from '../../business';
 import { STATUS_LABELS, summarise, type Evidence, type ExecutiveSummary, type HealthStatus, type PainPoint } from '../../insights';
 import type { Severity } from '../../inference/types';
 import { formatMoney, formatMoneyShort } from '../../savings';
@@ -142,6 +143,38 @@ function kpis(l: Layout, { audit, summary }: Context): void {
     l.text(tile.caption, x + 12, l.y + 34, { size: TYPE.tiny, color: COLORS.textSecondary, lineHeight: 10 }, w - 24);
   });
   l.y += h + 10;
+}
+
+/** The business case in three tiles: what a system would have saved, faster new screens, and break-even. */
+function businessCase(l: Layout, { audit, options }: Context): void {
+  const b = buildBusinessCase(audit, options.dismissed);
+  if (b.avoidable.likely <= 0 && b.oneTimeFix.hours <= 0) return;
+  const hrs = (n: number) => `${Math.round(n).toLocaleString('en-US')} h`;
+  const speedup = Math.round(audit.assumptions.systemSpeedup * 100);
+  const tiles = [
+    { eyebrow: 'A design system would have saved', value: hrs(b.avoidable.likely), caption: `${b.teamTime}; likely ${hrs(b.avoidable.low)} to ${hrs(b.avoidable.high)}` },
+    { eyebrow: 'Every new screen', value: `${speedup}% faster`, caption: `with shared tokens and components: about ${hrs(b.yearly.newScreenHours)} a year` },
+    // Break-even without the fix hours: the report shows the return, never a figure that reads as a quote.
+    { eyebrow: 'Closing the gaps', value: b.breakEvenMonths ? `${b.breakEvenMonths} months` : '—', caption: b.breakEvenMonths ? 'until the cleanup pays for itself' : 'Nothing urgent to fix' },
+  ];
+  const wins = b.quickWins.length;
+  const footnote = wins
+    ? `Start here: ${wins} quick ${wins === 1 ? 'win closes' : 'wins close'} the most visible gaps first.`
+    : '';
+  const gap = 8;
+  const w = (l.width - gap * 2) / 3;
+  const h = 66;
+  l.ensure(h + (footnote ? 18 : 0));
+  tiles.forEach((tile, i) => {
+    const x = l.left + i * (w + gap);
+    l.card(x, l.y, w, h);
+    l.text(tile.eyebrow, x + 12, l.y + 10, { size: TYPE.tiny, color: COLORS.textSecondary }, w - 24);
+    l.text(tile.value, x + 12, l.y + 22, { size: 15, font: 'bold' }, w - 24);
+    l.text(tile.caption, x + 12, l.y + 42, { size: TYPE.tiny, color: COLORS.textSecondary, lineHeight: 10 }, w - 24);
+  });
+  l.y += h + 6;
+  if (footnote) l.y += l.text(footnote, l.left, l.y, small, l.width) + 4;
+  l.y += 6;
 }
 
 /** Two charts side by side: where the cost comes from, and how each area scores. */
@@ -639,6 +672,7 @@ export async function auditToPdf(audit: Audit, options: ClientReportOptions): Pr
   const l = new Layout(pdf, fonts);
   await cover(l, ctx);
   kpis(l, ctx);
+  businessCase(l, ctx);
   dashboard(l, ctx);
   contents(l, ctx);
   hook(l, ctx);

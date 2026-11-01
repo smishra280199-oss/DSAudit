@@ -1,7 +1,9 @@
 import { createContext, useContext } from 'react';
 import type { AreaKey, FoundationKey } from '../../../inference/types';
 
-export type ViewKey = 'overview' | 'foundations' | 'components' | 'opportunities' | 'inspect' | 'pages';
+export type ViewKey = 'overview' | 'foundations' | 'components' | 'opportunities' | 'report' | 'inspect' | 'pages';
+
+export type ReportVersion = 'executive' | 'detailed' | 'outreach';
 
 /** Foundations view segments: the six foundations plus tokens. */
 export type FoundationSegment = FoundationKey | 'tokens';
@@ -10,6 +12,11 @@ export interface Navigation {
   view: ViewKey;
   foundation: FoundationSegment;
   go: (view: ViewKey, foundation?: FoundationSegment) => void;
+  /** The opportunity to open and scroll to on the Opportunities tab. */
+  focusedOpportunity: string | null;
+  openOpportunity: (id: string) => void;
+  reportVersion: ReportVersion;
+  openReport: (version: ReportVersion) => void;
   openSettings: () => void;
   openReportDetails: () => void;
 }
@@ -42,6 +49,7 @@ export const VIEW_TITLES: Record<ViewKey, string> = {
   foundations: 'Foundations',
   components: 'Components',
   opportunities: 'Opportunities',
+  report: 'Report',
   inspect: 'Inspect',
   pages: 'Pages',
 };

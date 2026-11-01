@@ -4,12 +4,14 @@
  * report), and the stock-take. What you see here is what the client reads.
  */
 
+import { buildBusinessCase, consistencyLevel } from '../../../../business';
 import { summarise, STATUS_LABELS, type HealthStatus, type PainPoint } from '../../../../insights';
 import type { ConfidenceLevel, Severity } from '../../../../inference/types';
 import { formatMoney, formatMoneyShort } from '../../../../savings';
-import { Badge, Button, Card, EyeOffIcon, FileIcon, InfoIcon, List, Menu, PagesIcon, Row, Spinner, TargetIcon, UndoIcon, type Tone } from '../ui';
+import { Badge, Button, Card, ChevronRightIcon, EyeOffIcon, FileIcon, InfoIcon, List, Menu, PagesIcon, Row, Spinner, TargetIcon, UndoIcon, type Tone } from '../ui';
 import { Stat, StatStrip } from '../components/Stat';
 import { useNavigation } from '../navigation';
+import { ImpactEffortMatrix } from './OpportunitiesView';
 import { useAuditState, useController } from '../use-audit';
 import { useReports } from '../use-reports';
 
@@ -25,7 +27,7 @@ const PRIORITY: Record<Severity, { label: string; tone: Tone }> = {
 export function OverviewView() {
   const controller = useController();
   const { audit, dismissed, hostAccess, collection } = useAuditState();
-  const { go, openReportDetails, openSettings } = useNavigation();
+  const { go, openReportDetails, openSettings, openOpportunity, openReport } = useNavigation();
   const reports = useReports();
   if (!audit) return null;
 
@@ -36,6 +38,9 @@ export function OverviewView() {
   const money = (n: number) => formatMoney(n, assumptions.currency);
   const short = (n: number) => formatMoneyShort(n, assumptions.currency);
   const comparison = controller.comparison();
+  const business = buildBusinessCase(audit, dismissed);
+  const level = consistencyLevel(summary.score);
+  const top = business.ranked.slice(0, 3);
 
   const findingRow = (p: PainPoint, index: number, excluded: boolean) => (
     <Row
@@ -75,7 +80,7 @@ export function OverviewView() {
           <Stat value={short(summary.numbers.yearlyCost)} label="Yearly cost of inconsistency" />
           <Stat value={short(summary.numbers.recoverable)} label="Could be saved each year" />
           <Stat value={`${summary.numbers.hoursLost}h`} label="Team hours lost a year" />
-          <Stat value={`${summary.score}/100`} label="Consistency score" />
+          <Stat value={`${summary.score}/100`} label={`Consistency · ${level.level}`} />
         </StatStrip>
         <div className="overview-actions">
           <Button
@@ -91,6 +96,43 @@ export function OverviewView() {
           </Button>
         </div>
       </Card>
+
+      {top.length > 0 && (
+        <Card
+          title="Biggest opportunities"
+          subtitle={`${business.ranked.length} changes found, ${business.ranked.filter((r) => r.impact === 'high').length} high impact; ${business.quickWins.length} quick ${business.quickWins.length === 1 ? 'win needs' : 'wins need'} only small effort.${business.quickWins.length ? ' Start with these.' : ''}`}
+          action={
+            <Button size="sm" variant="ghost" onClick={() => openReport('executive')}>
+              See the business case →
+            </Button>
+          }
+        >
+          <List label="Biggest opportunities">
+            {top.map((r, i) => (
+              <Row
+                key={r.opportunity.id}
+                wrap
+                leading={<span className="step">{i + 1}</span>}
+                title={r.opportunity.title}
+                meta={`${r.effort.charAt(0).toUpperCase()}${r.effort.slice(1)} effort · ${r.opportunity.affected.toLocaleString()} affected${r.quickWin ? ' · Quick win' : ''}`}
+                trailing={
+                  <>
+                    <Badge tone={PRIORITY[r.impact].tone}>{r.impact === 'high' ? 'High' : r.impact === 'medium' ? 'Medium' : 'Low'}</Badge>
+                    <ChevronRightIcon size={14} />
+                  </>
+                }
+                onClick={() => openOpportunity(r.opportunity.id)}
+              />
+            ))}
+          </List>
+          {business.ranked.length > 1 && <ImpactEffortMatrix ranked={business.ranked} />}
+          {business.ranked.length > 3 && (
+            <Button size="sm" variant="secondary" onClick={() => go('opportunities')}>
+              View all {business.ranked.length} opportunities →
+            </Button>
+          )}
+        </Card>
+      )}
 
       <Card
         title={snapshot.pages ? `${snapshot.pages.length} pages reviewed` : '1 page reviewed'}

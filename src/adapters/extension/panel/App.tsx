@@ -5,7 +5,7 @@ import { Header } from './components/Header';
 import { ReportDetailsDialog } from './components/ReportDetailsDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { TabBar, TABS } from './components/TabBar';
-import { NavigationContext, type FoundationSegment, type Navigation, type ViewKey } from './navigation';
+import { NavigationContext, type FoundationSegment, type Navigation, type ReportVersion, type ViewKey } from './navigation';
 import { useAuditState, useController } from './use-audit';
 import { ComponentsView } from './views/ComponentsView';
 import { FoundationsView } from './views/FoundationsView';
@@ -13,12 +13,14 @@ import { PagesView } from './views/PagesView';
 import { InspectView } from './views/InspectView';
 import { OpportunitiesView } from './views/OpportunitiesView';
 import { OverviewView } from './views/OverviewView';
+import { ReportView } from './views/ReportView';
 
 const VIEWS: Record<ViewKey, { render: () => ReactNode; needsAudit: boolean }> = {
   overview: { render: () => <OverviewView />, needsAudit: true },
   foundations: { render: () => <FoundationsView />, needsAudit: true },
   components: { render: () => <ComponentsView />, needsAudit: true },
   opportunities: { render: () => <OpportunitiesView />, needsAudit: true },
+  report: { render: () => <ReportView />, needsAudit: true },
   inspect: { render: () => <InspectView />, needsAudit: false },
   pages: { render: () => <PagesView />, needsAudit: false },
 };
@@ -34,6 +36,8 @@ export function App() {
   const [foundation, setFoundation] = useState<FoundationSegment>('color');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [focusedOpportunity, setFocusedOpportunity] = useState<string | null>(null);
+  const [reportVersion, setReportVersion] = useState<ReportVersion>('executive');
 
   const go = useCallback((next: ViewKey, nextFoundation?: FoundationSegment) => {
     setView(next);
@@ -41,11 +45,27 @@ export function App() {
   }, []);
 
   const navigation = useMemo<Navigation>(
-    () => ({ view, foundation, go, openSettings: () => setSettingsOpen(true), openReportDetails: () => setDetailsOpen(true) }),
-    [view, foundation, go],
+    () => ({
+      view,
+      foundation,
+      go,
+      focusedOpportunity,
+      openOpportunity: (id: string) => {
+        setFocusedOpportunity(id);
+        setView('opportunities');
+      },
+      reportVersion,
+      openReport: (version: ReportVersion) => {
+        setReportVersion(version);
+        setView('report');
+      },
+      openSettings: () => setSettingsOpen(true),
+      openReportDetails: () => setDetailsOpen(true),
+    }),
+    [view, foundation, go, focusedOpportunity, reportVersion],
   );
 
-  // Panel shortcuts: C capture, I inspect, 1–6 switch views.
+  // Panel shortcuts: C capture, I inspect, 1–7 switch views.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target) || settingsOpen || detailsOpen) return;
@@ -54,7 +74,7 @@ export function App() {
       else if (key === 'i') {
         setView('inspect');
         void controller.setInspectMode(!controller.getState().inspect.active);
-      } else if (/^[1-6]$/.test(key)) setView(TABS[Number(key) - 1]!.view);
+      } else if (/^[1-7]$/.test(key)) setView(TABS[Number(key) - 1]!.view);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

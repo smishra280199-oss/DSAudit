@@ -13,6 +13,8 @@ interface RowProps {
   selected?: boolean;
   expanded?: boolean;
   onClick?: () => void;
+  /** Id of the list item, for linking and scrolling to a row. */
+  id?: string;
   children?: ReactNode;
 }
 
@@ -20,7 +22,7 @@ interface RowProps {
  * A list row: leading visual, title over meta, trailing figures and hover
  * actions. Interactive rows lift into a card on hover.
  */
-export function Row({ leading, title, meta, wrap, trailing, actions, selected, expanded, onClick, children }: RowProps) {
+export function Row({ leading, title, meta, wrap, trailing, actions, selected, expanded, onClick, id, children }: RowProps) {
   const onKeyDown = (event: KeyboardEvent) => {
     if (onClick && (event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) {
       event.preventDefault();
@@ -28,7 +30,7 @@ export function Row({ leading, title, meta, wrap, trailing, actions, selected, e
     }
   };
   return (
-    <li>
+    <li id={id}>
       <div
         className={cx('ui-row', onClick && 'ui-row--interactive', selected && 'ui-row--selected', wrap && 'ui-row--wrap')}
         role={onClick ? 'button' : undefined}

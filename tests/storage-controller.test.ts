@@ -108,6 +108,16 @@ describe('audit controller', () => {
     expect(after.analysis).toBe(before.analysis);
     expect(after.savings.cleanupCost).toBe(Math.round(after.savings.cleanupHours * before.assumptions.hourlyRate * 2));
   });
+
+  it('knows when team numbers are customised, and resets them', async () => {
+    const { controller } = await setup();
+    expect(controller.assumptionsCustomised()).toBe(false);
+    const a = controller.getState().assumptions!;
+    await controller.updateAssumptions({ ...a, effort: { ...a.effort, smallFix: a.effort.smallFix + 1 } });
+    expect(controller.assumptionsCustomised()).toBe(true);
+    await controller.resetAssumptions();
+    expect(controller.assumptionsCustomised()).toBe(false);
+  });
 });
 
 describe('report details', () => {
