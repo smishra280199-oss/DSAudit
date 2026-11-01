@@ -194,15 +194,18 @@ function interactionCoverage(liveElements: Element[], stateRules: StateRule[]): 
   const focusTechniques: InteractionCoverage['focusTechniques'] = {};
   const outlineRemovedWithoutReplacement: InteractionCoverage['outlineRemovedWithoutReplacement'] = [];
 
+  const drawing = focusRules.filter((r) => focusTechnique(r.declarations) !== 'none');
   for (const rule of focusRules) {
     const technique = focusTechnique(rule.declarations);
     focusTechniques[technique] = (focusTechniques[technique] ?? 0) + 1;
     if (!removesOutline(rule.declarations) || technique !== 'none') continue;
-    // A sibling focus rule for the same base selector may draw focus another way.
-    const replaced = focusRules.some(
-      (other) => other !== rule && other.base === rule.base && focusTechnique(other.declarations) !== 'none',
-    );
-    if (!replaced) outlineRemovedWithoutReplacement.push({ selector: rule.selector, sheet: rule.sheet });
+    // `:focus:not(:focus-visible)` hides the ring for mouse users only: the recommended pattern, not a removal.
+    if (/:not\(\s*:focus-visible\s*\)/.test(rule.selector)) continue;
+    // Only rules that reach an element on this page count, and only where nothing else draws focus on it.
+    const hit = interactive.filter((el) => rule.base !== '*' && safeMatches(el, rule.base));
+    if (hit.length === 0) continue;
+    const unreplaced = hit.filter((el) => !drawing.some((other) => other !== rule && other.base !== '*' && safeMatches(el, other.base)));
+    if (unreplaced.length > 0) outlineRemovedWithoutReplacement.push({ selector: rule.selector, sheet: rule.sheet });
   }
 
   const coveredBy = (el: Element, bases: string[]) => bases.some((base) => base !== '*' && safeMatches(el, base));

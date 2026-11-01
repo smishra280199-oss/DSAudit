@@ -3,9 +3,9 @@
  * grouped by role and clustered perceptually so near-duplicates surface.
  */
 
-import { chroma, deltaE, NEAR_DUPLICATE_DELTA_E, parseColor, toHex, type Rgba } from '../../shared/color';
+import { chroma, deltaE, NEAR_DUPLICATE_DELTA_E, parseColor, toHex, toLab, type Rgba } from '../../shared/color';
 import type { PageSnapshot } from '../../shared/snapshot';
-import { ValueCounter, type ElementView } from '../elements';
+import { isVisuallyHidden, ValueCounter, type ElementView } from '../elements';
 import type { ColorCluster, FoundationAnalysis, FoundationGroup, ValueStat } from '../types';
 import { tokenCoverage } from './shared';
 
@@ -25,7 +25,9 @@ function normalise(value: string): string | null {
 export function analyseColor(snapshot: PageSnapshot, views: ElementView[]): FoundationAnalysis {
   const counters = Object.fromEntries(ROLES.map((r) => [r.key, new ValueCounter()])) as Record<Role, ValueCounter>;
 
-  for (const { el, styles } of views) {
+  for (const view of views) {
+    const { el, styles } = view;
+    if (isVisuallyHidden(view)) continue;
     for (const role of ROLES) {
       // Text colour only matters where there is text; it is inherited everywhere else.
       if (role.key === 'text' && !el.text) continue;
@@ -63,6 +65,11 @@ export function analyseColor(snapshot: PageSnapshot, views: ElementView[]): Foun
   };
 }
 
+/** Near-white neutrals: page and panel backgrounds that systems layer on purpose. */
+function isSurfaceTint(c: Rgba): boolean {
+  return chroma(c) < 8 && toLab(c)[0] >= 96;
+}
+
 /** Greedy clustering by ΔE: the most used colour of each cluster is its representative. */
 export function clusterPalette(groups: FoundationGroup[]): ColorCluster[] {
   const merged = new Map<string, ValueStat & { roles: ColorCluster['roles'] }>();
@@ -79,7 +86,7 @@ export function clusterPalette(groups: FoundationGroup[]): ColorCluster[] {
   const clusters: (ColorCluster & { rgba: Rgba })[] = [];
   for (const entry of [...merged.values()].sort((a, b) => b.count - a.count)) {
     const rgba = parseColor(entry.value)!;
-    const home = clusters.find((c) => deltaE(c.rgba, rgba) < NEAR_DUPLICATE_DELTA_E);
+    const home = clusters.find((c) => deltaE(c.rgba, rgba) < NEAR_DUPLICATE_DELTA_E && !(isSurfaceTint(c.rgba) && isSurfaceTint(rgba)));
     const { roles, ...stat } = entry;
     if (home) {
       home.members.push(stat);

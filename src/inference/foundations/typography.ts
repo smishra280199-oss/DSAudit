@@ -7,7 +7,7 @@ import { roundPx } from '../../shared/css-values';
 import type { PageSnapshot } from '../../shared/snapshot';
 import { px, ValueCounter, type ElementView } from '../elements';
 import type { FoundationAnalysis, ScaleFit, ValueStat } from '../types';
-import { markNumericNearDuplicates, tokenCoverage, weightedShare } from './shared';
+import { markNumericNearDuplicates, tokenCoverage, weightedShare, browserDefaultTest } from './shared';
 
 /** Common modular ratios. Denser ones (e.g. 1.067) are left out: they "fit" almost any set of sizes. */
 const RATIOS = [1.125, 1.2, 1.25, 1.333, 1.414, 1.5, 1.618];
@@ -26,9 +26,11 @@ export function analyseTypography(snapshot: PageSnapshot, views: ElementView[]):
   const families = new ValueCounter();
   const tracking = new ValueCounter();
 
+  const isBrowserDefault = browserDefaultTest(snapshot, 'font-size');
   for (const { el, styles } of views) {
     if (!el.text) continue;
     const size = px(styles.fontSize);
+    if (size !== null && isBrowserDefault(el.tag, size)) continue;
     if (size !== null) sizes.add(roundPx(size), el.selector, `${roundPx(size)}px`);
     if (styles.fontWeight) weights.add(styles.fontWeight, el.selector);
     if (styles.lineHeight) {

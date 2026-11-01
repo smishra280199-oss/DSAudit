@@ -131,13 +131,21 @@ function signatureOf(view: ElementView, def: KindDefinition): { signature: strin
 
 const MAX_DRIFTED_PROPERTIES = 3;
 
+/** The rounded height a sized kind (buttons, inputs) carries at the end of its signature. */
+function heightOf(v: ComponentVariant): number | null {
+  const m = /\|h(\d+)$/.exec(v.signature);
+  return m ? Number(m[1]) : null;
+}
+
 /**
  * Two variants are near-duplicates when they differ in at most three
  * properties and every difference is barely visible (ΔE < 5 or ≤ 2px):
  * the signature of a value that drifted rather than a deliberate variant.
  */
 function nearlyEqual(a: ComponentVariant, b: ComponentVariant, keys: StyleKey[]): boolean {
-  let differences = 0;
+  // Same styles, a few pixels taller or shorter: the same control rebuilt with different padding.
+  let differences = heightOf(a) !== null && heightOf(b) !== null && heightOf(a) !== heightOf(b) ? (Math.abs(heightOf(a)! - heightOf(b)!) <= 4 ? 1 : 99) : 0;
+  if (differences > MAX_DRIFTED_PROPERTIES) return false;
   for (const key of keys) {
     const x = a.styles[key];
     const y = b.styles[key];

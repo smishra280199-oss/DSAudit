@@ -49,7 +49,7 @@ describe('executive summary', () => {
   const summary = summarise(audit, { clientName: 'Acme' });
 
   it('leads with the yearly cost in plain words, and never prices a service', () => {
-    expect(summary.headline).toMatch(/^Inconsistency is quietly costing your team about \$[\d,]+ a year\.$/);
+    expect(summary.headline).toMatch(/^We estimate inconsistency is costing your team about \$[\d,]+ a year\.$/);
     const text = JSON.stringify(summary);
     expect(text).not.toMatch(/cleanup|payback|invoice us|our fee/i);
   });
@@ -95,8 +95,8 @@ describe('executive summary', () => {
       expect(p.fixTitle).toBeTruthy();
     }
     const spacing = summary.painPoints.find((p) => p.id === 'spacing')!;
-    // 20 distinct paddings, of which 15 uses are off the 4px grid.
-    expect(spacing.count).toBe(15);
+    // 20 distinct paddings from 10px to 67px: 15 are off the 4px grid, but 67px is a layout size, not a spacing step.
+    expect(spacing.count).toBe(14);
   });
 
   it('maps problems by layer, prices each fix and lists strengths', () => {

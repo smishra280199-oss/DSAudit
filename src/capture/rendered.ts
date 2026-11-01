@@ -41,6 +41,7 @@ const RECORDED_ATTRS = [
   'title',
   'placeholder',
   'disabled',
+  'aria-disabled',
   'tabindex',
   'data-theme',
 ];
