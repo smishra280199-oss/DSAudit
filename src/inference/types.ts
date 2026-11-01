@@ -86,6 +86,10 @@ export interface ComponentVariant {
   selectors: string[];
   sampleText: string;
   tag: string;
+  /** The full look of the first instance, for drawing a faithful replica. */
+  preview: Partial<Record<StyleKey, string>>;
+  /** Rendered size of the first instance, in px. */
+  size: { w: number; h: number };
 }
 
 export interface ComponentAnalysis {
@@ -139,6 +143,15 @@ export interface AccessibilityAnalysis {
   contrastFailures: ContrastIssue[];
   unnamedControls: { selector: string; tag: string }[];
   controlsChecked: number;
+  /** WCAG 2.2 SC 2.5.8: targets under 24×24 px with no room around them. */
+  smallTargets: { selector: string; text: string; w: number; h: number }[];
+  targetsChecked: number;
+  /** WCAG 1.3.1 / 3.3.2 / 4.1.2: form fields with no label a screen reader can announce. */
+  unlabelledFields: { selector: string; tag: string; placeholderOnly: boolean }[];
+  fieldsChecked: number;
+  /** WCAG 1.1.1: images with no alt attribute at all (alt="" is a valid decorative image). */
+  imagesWithoutAlt: { selector: string }[];
+  imagesChecked: number;
 }
 
 export interface InteractionAnalysis extends InteractionCoverage {
@@ -172,6 +185,9 @@ export type OpportunityKind =
   | 'missing-hover-style'
   | 'low-contrast'
   | 'missing-accessible-name'
+  | 'missing-form-label'
+  | 'small-target'
+  | 'missing-alt-text'
   | 'mixed-naming-conventions';
 
 export interface Opportunity {

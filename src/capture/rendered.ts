@@ -147,6 +147,8 @@ export function walkRendered(doc: Document): RenderedWalk {
       if (value !== null) attrs[name] = value.slice(0, 120);
     }
     if (el.hasAttribute('href')) attrs.href = '';
+    // Whether a <label> is tied to this field (for= or wrapping): not visible in the attributes themselves.
+    if ('labels' in el && (el as HTMLInputElement).labels && (el as HTMLInputElement).labels!.length > 0) attrs['data-labelled'] = '';
     if (el.hasAttribute('style')) attrs.style = '';
 
     const index = elements.length;

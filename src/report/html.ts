@@ -12,6 +12,55 @@ import type { Severity } from '../inference/types';
 import { formatMoney, formatMoneyShort } from '../savings';
 import type { ClientReportOptions } from './branding';
 import { formatDate } from './format';
+import { componentGallery, replicaCss } from '../insights/gallery';
+import { starterSystem } from '../insights/starter-system';
+import { accessibilityReport } from '../insights/wcag';
+
+const cssText = (css: Record<string, string>) => Object.entries(css).map(([k, v]) => `${k}:${escape(v)}`).join(';');
+
+function galleryHtml(audit: Audit): string {
+  const groups = componentGallery(audit).filter((g) => g.hasProblem);
+  if (groups.length === 0) return '';
+  return `<h2>Your components, side by side</h2><p class="muted">Every style we found, redrawn from your pages. “Copy of” marks a near-identical style.</p>
+${groups
+  .map(
+    (g) => `<section class="card"><h3>${escape(g.label)}: ${escape(g.headline)}</h3><div class="gal">${g.items
+      .map(
+        (it) => `<div class="tile"><div class="stage"><span style="${cssText(replicaCss(g.kind, it.styles))};max-width:100%;overflow:hidden;text-overflow:ellipsis">${escape(it.label)}</span></div>
+<div class="small muted tmeta">#${it.n} · ${it.count}×${it.copyOf !== null ? ` <span class="dot at-risk">copy of #${it.copyOf}</span>` : it.rare ? ' <span class="dot needs-work">used once</span>' : ''}</div></div>`,
+      )
+      .join('')}</div></section>`,
+  )
+  .join('')}`;
+}
+
+function accessibilityHtml(audit: Audit): string {
+  const r = accessibilityReport(audit);
+  const rows = r.checks.filter((c) => c.status !== 'not-applicable');
+  if (rows.length === 0) return '';
+  return `<h2>Accessibility check</h2><p class="muted">${escape(r.headline)}</p>
+<section class="card tablecard"><table><tr><th>Check</th><th>WCAG</th><th>Who it affects</th><th>Result</th></tr>${rows
+    .map(
+      (c) => `<tr><td><b>${escape(c.name)}</b></td><td class="muted">${c.sc} (${c.level}${c.version === '2.2' ? ', 2.2' : ''})</td><td class="small muted">${escape(c.impact)}</td>
+<td>${c.status === 'fail' ? `<span class="dot at-risk">Fails: ${c.failed} of ${c.checked}</span>` : `<span class="dot strong">Passes</span>`}</td></tr>`,
+    )
+    .join('')}</table></section>
+<p class="small muted">${escape(r.regulation)} Needs a manual review: ${escape(r.manual.join('; '))}.</p>`;
+}
+
+function systemHtml(audit: Audit, clientName: string): string {
+  const s = starterSystem(audit, clientName);
+  if (s.tokens.length === 0) return '';
+  const colours = s.tokens.filter((t) => t.category === 'color' && !t.alias);
+  return `<h2>Your design system, extracted</h2><p class="muted">We turned the ${s.before} values your product uses today into ${s.after} named tokens, built from your own colours, sizes and spacing. Reply and we’ll send it as a ready-to-use file (CSS variables and design-token JSON). Review the names and merges before adopting it.</p>
+<section class="card"><h3>Colour</h3><div class="gal">${colours
+    .map((t) => `<div class="sw" style="margin:6px 0"><i style="background:${escape(t.value)};width:28px;height:28px"></i><span><b>${escape(t.name.replace('color-', ''))}</b><br>${escape(t.value)}${t.replaces.length ? ` · +${t.replaces.length} merged` : ''}</span></div>`)
+    .join('')}</div></section>
+<section class="card tablecard"><table><tr><th>Token</th><th>Value</th><th>Replaces</th></tr>${s.tokens
+    .filter((t) => t.category !== 'color')
+    .map((t) => `<tr><td><code>--${escape(t.name)}</code></td><td class="muted">${escape(t.value)}</td><td class="small muted">${escape(t.replaces.join(', ')) || '—'}</td></tr>`)
+    .join('')}</table></section>`;
+}
 
 export const escape = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -55,6 +104,8 @@ footer{color:var(--text-3);font-size:11px;text-align:center;margin-top:16px}
 .part{font-size:12px;color:var(--text-2);margin-top:36px}.part+h2{font-size:22px;margin-top:2px}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.stats div{background:var(--canvas);border-radius:8px;box-shadow:inset 0 0 0 1px var(--border);padding:8px 10px}
 .stats b{display:block;font-size:15px}.stats span{font-size:11px;color:var(--text-2)}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px}.tile{border-radius:8px;box-shadow:inset 0 0 0 1px var(--border);overflow:hidden}
+.stage{display:grid;place-items:center;height:70px;padding:8px;background:#fff;border-bottom:1px solid var(--border)}.tmeta{padding:4px 8px}code{font-size:11.5px}
 @media (max-width:640px){.grid2,.grid3,.stats{grid-template-columns:1fr}}
 @media (max-width:640px){.grid4{grid-template-columns:repeat(2,1fr)}.cover{grid-template-columns:1fr}.shot{width:100%}}
 @media print{@page{size:A4;margin:14mm}body{font-size:11px}main{padding:0;max-width:none}.card{break-inside:avoid}.break{break-before:page}}
@@ -164,9 +215,11 @@ ${
 <td class="num">${p.annualCost ? money(p.annualCost) : '<span class="faint">—</span>'}</td><td><span class="dot ${PRIORITY[p.severity].dot}">${PRIORITY[p.severity].label}</span></td></tr>`,
         )
         .join('')}</table></section>
+${galleryHtml(audit)}
 ${summary.painPoints.map((p, i) => problemHtml(p, i + 1, money)).join('')}`
     : '<p class="muted">We didn’t find any problems worth reporting.</p>'
 }
+${accessibilityHtml(audit)}
 
 ${
   summary.fixes.length
@@ -187,6 +240,8 @@ ${
 }`
     : ''
 }
+
+${systemHtml(audit, summary.clientName)}
 
 <p class="part break">Part 3</p><h2>What’s working well</h2><p class="muted">Parts of your product that are already consistent. Worth protecting as the product grows.</p>
 ${

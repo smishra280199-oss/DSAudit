@@ -350,6 +350,52 @@ function accessibilityOpportunities({ accessibility }: OpportunityInput): Opport
       selectors: unnamed.map((u) => u.selector).slice(0, 60),
     });
   }
+  const fields = accessibility.unlabelledFields;
+  if (fields.length > 0) {
+    out.push({
+      id: 'a11y-form-labels',
+      kind: 'missing-form-label',
+      area: 'accessibility',
+      severity: 'high',
+      title: `${plural(fields.length, 'form field has', 'form fields have')} no label`,
+      detail: `Screen readers announce ${fields.length === 1 ? 'it' : 'them'} as just “edit text”.${fields.some((f) => f.placeholderOnly) ? ' Placeholder text disappears as soon as someone types, so it isn’t a label.' : ''}`,
+      fix: 'Give each field a visible <label> tied to it with for/id, or an aria-label where a visible label really doesn’t fit.',
+      affected: fields.length,
+      effortHours: hours(fields.length * EFFORT_HOURS.accessibleName),
+      selectors: fields.map((f) => f.selector).slice(0, 60),
+    });
+  }
+  const targets = accessibility.smallTargets;
+  if (targets.length > 0) {
+    out.push({
+      id: 'a11y-target-size',
+      kind: 'small-target',
+      area: 'accessibility',
+      severity: bySeverity(targets.length, 5, 2),
+      title: `${plural(targets.length, 'tap target is', 'tap targets are')} smaller than 24×24 px`,
+      detail: 'They are crowded by other targets, so they are easy to miss with a finger or an unsteady hand (WCAG 2.2, 2.5.8).',
+      fix: 'Make each at least 24×24 px (44 px is better on touch screens), or leave enough space around it.',
+      affected: targets.length,
+      effortHours: hours(targets.length * EFFORT_HOURS.focusStylePerControl),
+      selectors: targets.map((t) => t.selector).slice(0, 60),
+      values: targets.slice(0, 16).map((t) => `${t.w}×${t.h}`),
+    });
+  }
+  const images = accessibility.imagesWithoutAlt;
+  if (images.length > 0) {
+    out.push({
+      id: 'a11y-alt-text',
+      kind: 'missing-alt-text',
+      area: 'accessibility',
+      severity: bySeverity(images.length, 5, 1),
+      title: `${plural(images.length, 'image has', 'images have')} no alt text`,
+      detail: 'Screen readers read out the file name instead, or skip the image without saying what it shows.',
+      fix: 'Add alt text that says what each image shows, or alt="" if it is purely decorative.',
+      affected: images.length,
+      effortHours: hours(images.length * EFFORT_HOURS.accessibleName),
+      selectors: images.map((i) => i.selector).slice(0, 60),
+    });
+  }
   return out;
 }
 

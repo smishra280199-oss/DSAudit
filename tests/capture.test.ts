@@ -88,3 +88,14 @@ describe('focus rules', () => {
     expect(captured.authored.interaction.outlineRemovedWithoutReplacement.map((r) => r.selector)).toEqual(['.link-btn:focus']);
   });
 });
+
+describe('form labels', () => {
+  it('records whether a field has a <label> tied to it', () => {
+    document.open();
+    document.write(`<label for="a">Email</label><input id="a"><label>Name <input id="b"></label><input id="c" placeholder="Search">`);
+    document.close();
+    const captured = createCaptureApi(document, { onInspectPicked: () => {}, onInspectExit: () => {} }).capture([]);
+    const inputs = captured.rendered.elements.filter((e) => e.tag === 'input');
+    expect(inputs.map((e) => e.attrs['data-labelled'] !== undefined)).toEqual([true, true, false]);
+  });
+});

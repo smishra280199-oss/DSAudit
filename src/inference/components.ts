@@ -160,6 +160,30 @@ function nearlyEqual(a: ComponentVariant, b: ComponentVariant, keys: StyleKey[])
   return differences > 0;
 }
 
+const PREVIEW_KEYS: StyleKey[] = [
+  'backgroundColor',
+  'color',
+  'borderTopWidth',
+  'borderTopColor',
+  'borderTopLeftRadius',
+  'boxShadow',
+  'fontSize',
+  'fontWeight',
+  'fontFamily',
+  'lineHeight',
+  'paddingTop',
+  'paddingLeft',
+];
+
+function previewOf(view: ElementView): Partial<Record<StyleKey, string>> {
+  const out: Partial<Record<StyleKey, string>> = {};
+  for (const key of PREVIEW_KEYS) {
+    const value = view.styles[key];
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
 export function analyseComponents(views: ElementView[]): ComponentAnalysis[] {
   return COMPONENT_KINDS.map((def) => {
     const variants = new Map<string, ComponentVariant>();
@@ -181,6 +205,8 @@ export function analyseComponents(views: ElementView[]): ComponentAnalysis[] {
           selectors: [view.el.selector],
           sampleText: view.el.text,
           tag: view.el.tag,
+          preview: previewOf(view),
+          size: { w: view.el.rect.w, h: view.el.rect.h },
         });
       }
     }

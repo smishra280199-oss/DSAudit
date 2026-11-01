@@ -13,6 +13,9 @@
 import { PDFDocument, rgb, StandardFonts, type RGB } from 'pdf-lib';
 import type { Audit } from '../../audit';
 import { buildBusinessCase } from '../../business';
+import { componentGallery, type GalleryGroup } from '../../insights/gallery';
+import { starterSystem } from '../../insights/starter-system';
+import { accessibilityReport } from '../../insights/wcag';
 import { STATUS_LABELS, summarise, type Evidence, type ExecutiveSummary, type HealthStatus, type PainPoint } from '../../insights';
 import type { Severity } from '../../inference/types';
 import { formatMoney, formatMoneyShort } from '../../savings';
@@ -390,7 +393,93 @@ function partProblems(l: Layout, ctx: Context): void {
   }
   problemMap(l, ctx);
   problemTable(l, ctx);
+  gallery(l, ctx);
   summary.painPoints.forEach((p, i) => problemCard(l, p, i + 1, ctx.money));
+  accessibility(l, ctx);
+}
+
+// ── Side by side: every style of each element, redrawn ───────────────────
+
+/** px on the page → pt in the PDF, with the same caps as the panel's replicas. */
+const PT = 0.75;
+const pxOf = (v: string | undefined, max: number, fallback: number) => {
+  const n = v ? parseFloat(v) : NaN;
+  return Math.min(Number.isFinite(n) ? n : fallback, max);
+};
+
+function replica(l: Layout, group: GalleryGroup, item: GalleryGroup['items'][number], cx: number, cy: number, maxW: number): void {
+  const s = item.styles;
+  const size = pxOf(s.fontSize, group.kind === 'heading' ? 22 : 16, 16) * PT;
+  const style: TextStyle = { size, font: Number(s.fontWeight ?? 400) >= 600 ? 'bold' : 'regular', color: s.color ? colour(s.color) : COLORS.text };
+  const boxed = group.kind === 'button' || group.kind === 'badge' || group.kind === 'input';
+  const padX = boxed ? pxOf(s.paddingLeft, 24, 8) * PT : 0;
+  const padY = boxed ? pxOf(s.paddingTop, 12, 4) * PT : 0;
+  let label = item.label;
+  while (label.length > 3 && l.textWidth(label, style) + padX * 2 > maxW) label = `${label.slice(0, -2)}…`;
+  const w = Math.max(group.kind === 'input' ? 90 : 0, l.textWidth(label, style) + padX * 2);
+  const h = size * 1.25 + padY * 2;
+  const x = cx - w / 2;
+  const top = cy - h / 2;
+  const bg = s.backgroundColor && (parseColor(s.backgroundColor)?.a ?? 0) > 0 ? colour(s.backgroundColor) : null;
+  const border = s.borderTopWidth && parseFloat(s.borderTopWidth) > 0 ? colour(s.borderTopColor ?? s.color ?? '#000') : undefined;
+  if (bg || border) l.roundedRect(x, top, w, h, Math.min(pxOf(s.borderTopLeftRadius, 999, 0) * PT, h / 2), bg ?? COLORS.surface, border);
+  l.text(label, x + padX, top + padY + size * 0.12, style, Number.MAX_SAFE_INTEGER);
+}
+
+function gallery(l: Layout, { audit }: Context): void {
+  const groups = componentGallery(audit).filter((g) => g.hasProblem);
+  if (groups.length === 0) return;
+  heading(l, 'Your components, side by side', 'Every style we found, redrawn from your pages. Numbers marked “copy of” are near-identical to another style.');
+  const cols = 4;
+  const gap = 8;
+  const tileW = (l.width - PAD * 2 - gap * (cols - 1)) / cols;
+  const stageH = 46;
+  const tileH = stageH + 18;
+  for (const group of groups) {
+    const rows = Math.ceil(group.items.length / cols);
+    card(l, (top) => {
+      let h = l.text(`${group.label}: ${group.headline}`, l.left + PAD, top, { size: TYPE.body, font: 'bold' }, l.width - PAD * 2) + 8;
+      group.items.forEach((item, i) => {
+        const x = l.left + PAD + (i % cols) * (tileW + gap);
+        const y = top + h + Math.floor(i / cols) * (tileH + gap);
+        l.roundedRect(x, y, tileW, tileH, 6, COLORS.surface, COLORS.border);
+        replica(l, group, item, x + tileW / 2, y + stageH / 2, tileW - 12);
+        l.text(`#${item.n} · used ${item.count}×`, x + 6, y + stageH + 3, { size: TYPE.tiny, color: COLORS.textSecondary }, tileW - 12);
+        if (item.copyOf !== null) l.textRight(`copy of #${item.copyOf}`, x + tileW - 6, y + stageH + 3, { size: TYPE.tiny, color: COLORS.danger });
+        else if (item.rare) l.textRight('used once', x + tileW - 6, y + stageH + 3, { size: TYPE.tiny, color: COLORS.warning });
+      });
+      return h + rows * (tileH + gap) - gap;
+    });
+  }
+  l.gap(8);
+}
+
+// ── Accessibility check ──────────────────────────────────────────────────
+
+function accessibility(l: Layout, { audit }: Context): void {
+  const report = accessibilityReport(audit);
+  const rows = report.checks.filter((c) => c.status !== 'not-applicable');
+  if (rows.length === 0) return;
+  heading(l, 'Accessibility check', report.headline);
+  const col = { name: l.left + PAD, result: l.left + l.width - PAD };
+  const nameW = l.width - PAD * 2 - 110;
+  card(l, (top) => {
+    let y = top;
+    rows.forEach((c, i) => {
+      if (i > 0) l.rule(y - 6);
+      l.text(`${c.name}`, col.name, y, { size: TYPE.body, font: 'bold' }, nameW);
+      const result = c.status === 'fail' ? `Fails: ${c.failed} of ${c.checked}` : `Passes (${c.checked} checked)`;
+      const color = c.status === 'fail' ? COLORS.danger : COLORS.success;
+      const w = l.textWidth(result, { size: 8 }) + 9;
+      l.status(result, color, col.result - w, y + 1);
+      let h = l.lineHeight({ size: TYPE.body }) + 2;
+      h += l.text(`WCAG ${c.sc}, level ${c.level}${c.version === '2.2' ? ' (WCAG 2.2)' : ''}. ${c.impact}.`, col.name, y + h, small, nameW);
+      y += h + 12;
+    });
+    y += l.text(report.regulation, col.name, y, small, l.width - PAD * 2) + 6;
+    y += l.text(`Needs a manual review: ${report.manual.join('; ')}.`, col.name, y, small, l.width - PAD * 2);
+    return y - top;
+  });
 }
 
 // ── Part 2: the fixes ────────────────────────────────────────────────────
@@ -464,6 +553,48 @@ function partFixes(l: Layout, ctx: Context): void {
       ),
     );
   }
+}
+
+// ── Your design system, extracted ────────────────────────────────────────
+
+function extractedSystem(l: Layout, { audit, options }: Context): void {
+  const system = starterSystem(audit, options.clientName);
+  const colours = system.tokens.filter((t) => t.category === 'color' && !t.alias);
+  if (system.tokens.length === 0) return;
+  heading(
+    l,
+    'Your design system, extracted',
+    `We turned the ${system.before} values your product uses today into ${system.after} named tokens, built from your own colours, sizes and spacing. Reply and we'll send it as a ready-to-use file (CSS variables and design-token JSON). Review the names and merges before adopting it.`,
+  );
+  const cols = 4;
+  const gap = 8;
+  const w = (l.width - PAD * 2 - gap * (cols - 1)) / cols;
+  if (colours.length) {
+    card(l, (top) => {
+      let h = l.text('Colour', l.left + PAD, top, { size: TYPE.body, font: 'bold' }) + 8;
+      colours.forEach((t, i) => {
+        const x = l.left + PAD + (i % cols) * (w + gap);
+        const y = top + h + Math.floor(i / cols) * 40;
+        l.swatch(colour(t.value), x, y, 26);
+        l.text(t.name.replace('color-', ''), x + 32, y + 2, { size: TYPE.small, font: 'bold' }, w - 34);
+        l.text(t.value + (t.replaces.length ? ` (+${t.replaces.length} merged)` : ''), x + 32, y + 14, { size: TYPE.tiny, color: COLORS.textSecondary }, w - 34);
+      });
+      return h + Math.ceil(colours.length / cols) * 40 - 8;
+    });
+  }
+  const rows = system.groups.filter((g) => g.category !== 'color');
+  card(l, (top) => {
+    let y = top;
+    for (const g of rows) {
+      y += l.text(g.label, l.left + PAD, y, { size: TYPE.body, font: 'bold' }) + 4;
+      const line = g.tokens.map((t) => `${t.name.split('-').slice(g.category === 'font-size' || g.category === 'font-weight' ? 2 : 1).join('-')} ${t.value}`).join('   ·   ');
+      y += l.text(line, l.left + PAD, y, small, l.width - PAD * 2);
+      const merged = g.tokens.filter((t) => t.replaces.length).map((t) => `${t.value} replaces ${t.replaces.slice(0, 4).join(', ')}`);
+      if (merged.length) y += 2 + l.text(`Merged: ${merged.join('; ')}`, l.left + PAD, y + 2, { ...small, color: COLORS.textTertiary }, l.width - PAD * 2);
+      y += 10;
+    }
+    return y - top - 10;
+  });
 }
 
 // ── Part 3: what's working well ──────────────────────────────────────────
@@ -680,6 +811,7 @@ export async function auditToPdf(audit: Audit, options: ClientReportOptions): Pr
   hook(l, ctx);
   partProblems(l, ctx);
   partFixes(l, ctx);
+  extractedSystem(l, ctx);
   partStrengths(l, ctx);
   pagesReviewed(l, ctx);
   method(l, ctx);

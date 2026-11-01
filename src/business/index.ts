@@ -72,6 +72,9 @@ const KIND_META: Record<OpportunityKind, { basis: Basis; certainty: number; chan
   'missing-hover-style': { basis: 'From CSS', certainty: 70, changeType: 'Design hover states' },
   'low-contrast': { basis: 'Measured', certainty: 90, changeType: 'Fix text contrast' },
   'missing-accessible-name': { basis: 'Measured', certainty: 90, changeType: 'Name controls' },
+  'missing-form-label': { basis: 'Measured', certainty: 90, changeType: 'Label form fields' },
+  'small-target': { basis: 'Measured', certainty: 85, changeType: 'Enlarge tap targets' },
+  'missing-alt-text': { basis: 'Measured', certainty: 95, changeType: 'Describe images' },
   'mixed-naming-conventions': { basis: 'Estimated', certainty: 60, changeType: 'Agree a naming convention' },
 };
 
@@ -275,6 +278,10 @@ function highlights(audit: Audit, ranked: RankedOpportunity[]): BusinessCase['hi
   if (contrast > 0) out.push({ text: `${contrast} ${contrast === 1 ? 'piece of text fails' : 'pieces of text fail'} the WCAG AA contrast standard.`, warning: true });
   const removed = analysis.interaction.outlineRemovedWithoutReplacement.length;
   if (removed > 0) out.push({ text: `Keyboard focus is switched off in ${removed} ${removed === 1 ? 'place' : 'places'}, which locks out keyboard users.`, warning: true });
+  const fields = analysis.accessibility.unlabelledFields.length;
+  if (fields > 0) out.push({ text: `${fields} form ${fields === 1 ? 'field has' : 'fields have'} no label a screen reader can announce.`, warning: true });
+  const targets = analysis.accessibility.smallTargets.length;
+  if (targets > 0) out.push({ text: `${targets} ${targets === 1 ? 'button or link is' : 'buttons and links are'} under 24×24 px and crowded, so easy to mis-tap.`, warning: true });
   if (out.length === 0 && ranked[0]) out.push({ text: ranked[0].opportunity.title, warning: ranked[0].opportunity.area === 'accessibility' });
   // Accessibility first: it is the strongest reason to act now.
   return out.sort((a, b) => Number(b.warning) - Number(a.warning)).slice(0, 4);

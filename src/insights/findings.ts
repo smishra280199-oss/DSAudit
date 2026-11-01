@@ -448,6 +448,91 @@ function unnamed({ audit, d }: Context): PainPoint | null {
   };
 }
 
+function formLabels({ audit, d }: Context): PainPoint | null {
+  const fields = audit.analysis.accessibility.unlabelledFields;
+  if (fields.length === 0) return null;
+  const selectors = fields.map((f) => f.selector);
+  const placeholder = fields.filter((f) => f.placeholderOnly).length;
+  return {
+    id: 'form-labels',
+    area: 'accessibility',
+    layer: 'Elements',
+    affects: 'Forms',
+    count: fields.length,
+    countLabel: fields.length === 1 ? 'field without a label' : 'fields without a label',
+    summary: placeholder ? 'Fields use placeholder text instead of a label.' : 'Fields have no label a screen reader can announce.',
+    fixTitle: 'Give every form field a real label',
+    severity: 'high',
+    title: `${plural(fields.length, 'form field has', 'form fields have')} no label`,
+    story:
+      `A screen reader announces ${fields.length === 1 ? 'this field' : 'these fields'} as just “edit text”, so a blind user can’t tell what to type.` +
+      (placeholder ? ` ${placeholder === fields.length ? 'They rely' : `${placeholder} rely`} on placeholder text, which disappears as soon as anyone starts typing.` : ''),
+    where: [],
+    pages: d.pages(selectors),
+    evidence: { kind: 'none' },
+    why: 'Forms are where customers sign up, pay and get in touch. An unlabelled field is a common reason people with disabilities abandon them.',
+    suggestion: 'Add a visible label above each field and tie it to the field (label for="…"). Keep placeholders for examples only.',
+    annualCost: null,
+    annualHours: null,
+    selectors,
+  };
+}
+
+function targets({ audit, d }: Context): PainPoint | null {
+  const small = audit.analysis.accessibility.smallTargets;
+  if (small.length === 0) return null;
+  const selectors = small.map((t) => t.selector);
+  const examples = small.slice(0, 3).map((t) => `“${t.text.slice(0, 24)}” (${t.w}×${t.h} px)`);
+  return {
+    id: 'targets',
+    area: 'accessibility',
+    layer: 'Elements',
+    affects: 'Tap targets',
+    count: small.length,
+    countLabel: small.length === 1 ? 'target under 24 px' : 'targets under 24 px',
+    summary: 'Small, crowded buttons and links are easy to miss.',
+    fixTitle: 'Make every tap target at least 24 px',
+    severity: small.length >= 5 ? 'high' : 'medium',
+    title: `${plural(small.length, 'button or link is', 'buttons and links are')} too small to tap reliably`,
+    story: `${listOf(examples)} ${small.length === 1 ? 'is' : 'are'} smaller than 24×24 px and sit close to other controls, so a thumb or an unsteady hand easily hits the wrong one.`,
+    where: [],
+    pages: d.pages(selectors),
+    evidence: { kind: 'none' },
+    why: 'WCAG 2.2 (2.5.8) asks for targets of at least 24×24 px. Mis-taps frustrate everyone on a phone, not only people with motor impairments.',
+    suggestion: 'Give small controls more padding so the clickable area is at least 24×24 px (44 px on touch screens), even if the icon stays small.',
+    annualCost: null,
+    annualHours: null,
+    selectors,
+  };
+}
+
+function altText({ audit, d }: Context): PainPoint | null {
+  const images = audit.analysis.accessibility.imagesWithoutAlt;
+  if (images.length === 0) return null;
+  const selectors = images.map((i) => i.selector);
+  return {
+    id: 'alt-text',
+    area: 'accessibility',
+    layer: 'Elements',
+    affects: 'Images',
+    count: images.length,
+    countLabel: images.length === 1 ? 'image without alt text' : 'images without alt text',
+    summary: 'Images give screen readers nothing to say.',
+    fixTitle: 'Describe every meaningful image',
+    severity: images.length >= 5 ? 'high' : 'medium',
+    title: `${plural(images.length, 'image has', 'images have')} no alt text`,
+    story: `${images.length === 1 ? 'One image has' : `${images.length} images have`} no alt attribute, so screen readers either read out the file name or skip ${images.length === 1 ? 'it' : 'them'} without saying what ${images.length === 1 ? 'it shows' : 'they show'}.`,
+    where: [],
+    pages: d.pages(selectors),
+    evidence: { kind: 'none' },
+    why: 'Alt text is the first thing accessibility reviews check, and it also helps search engines understand your pages.',
+    suggestion: 'Add a short description to each meaningful image, and alt="" to purely decorative ones.',
+    annualCost: null,
+    annualHours: null,
+    selectors,
+  };
+}
+
 function details({ audit, lineCost }: Context): PainPoint | null {
   const lines = audit.savings.lines.filter((l) => ['radius', 'border-width', 'shadow', 'z-index', 'duration'].includes(l.key) && l.excess > 0);
   if (lines.length === 0) return null;
@@ -495,6 +580,9 @@ export function findPainPoints(audit: Audit, dismissed: string[] = []): PainPoin
     contrast(ctx),
     keyboard(ctx),
     unnamed(ctx),
+    formLabels(ctx),
+    targets(ctx),
+    altText(ctx),
     details(ctx),
   ].filter((p): p is PainPoint => p !== null && !dismissed.includes(p.id));
 
