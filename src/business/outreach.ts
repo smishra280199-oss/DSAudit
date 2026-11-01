@@ -14,6 +14,19 @@ import type { ReportBranding } from '../report/branding';
 import { formatMoneyShort } from '../savings';
 import type { BusinessCase } from './index';
 
+/** Accessibility issues found by the exact checks: contrast, focus, names, labels, targets, alt text. */
+function a11yIssues(audit: Audit): number {
+  const a = audit.analysis.accessibility;
+  return (
+    a.contrastFailures.length +
+    audit.analysis.interaction.outlineRemovedWithoutReplacement.length +
+    a.unnamedControls.length +
+    a.unlabelledFields.length +
+    a.smallTargets.length +
+    a.imagesWithoutAlt.length
+  );
+}
+
 // ── Lead fit ────────────────────────────────────────────────────────────
 
 export type LeadTier = 'Strong lead' | 'Worth a message' | 'Low priority';
@@ -50,7 +63,7 @@ export function leadFit(audit: Audit, business: BusinessCase, summary: Executive
   if (analysis.confidence.level !== 'high') reasons.push({ text: `${analysis.confidence.level === 'low' ? 'Low' : 'Medium'} confidence: part of the CSS couldn’t be read`, positive: false });
 
   // Urgency: is there a reason to act now?
-  const a11y = analysis.accessibility.contrastFailures.length + analysis.interaction.outlineRemovedWithoutReplacement.length;
+  const a11y = a11yIssues(audit);
   const highs = business.ranked.filter((r) => r.impact === 'high').length;
   const urgency = a11y > 0 ? 20 : highs > 0 ? 12 : 0;
   if (a11y > 0) reasons.push({ text: 'Accessibility gaps give a reason to act now', positive: true });
@@ -75,8 +88,7 @@ export function leadFit(audit: Audit, business: BusinessCase, summary: Executive
 }
 
 function angleFor(audit: Audit, business: BusinessCase): string {
-  const { analysis } = audit;
-  if (analysis.accessibility.contrastFailures.length > 0 || analysis.interaction.outlineRemovedWithoutReplacement.length > 0) {
+  if (a11yIssues(audit) > 0) {
     return 'Lead with accessibility: it is concrete, visible and a risk they may not know about.';
   }
   const change = business.typicalChanges[0];

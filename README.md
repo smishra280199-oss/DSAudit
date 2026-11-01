@@ -43,7 +43,10 @@ The one-time setup for both is in [docs/RELEASING.md](docs/RELEASING.md).
    - **Detailed report**: every opportunity as a task with its evidence and the audit's limits. Copy it, or download Markdown or the raw JSON.
    - **Outreach** (only you see this): a lead-fit score with reasons and the angle most likely to land, a ready-to-send checklist, and first drafts (subject lines, email, LinkedIn message, follow-up) for a founder, design lead or engineering lead, built from their own product. Drafts never quote a price or an hour figure for the fixes.
    - **Your team's numbers**: cost per hour, currency, screens in the product, new screens a year, hours per new screen, design-system speed-up, visual changes a year, and effort per item. Every change recalculates the page and is saved.
-6. **Foundations**, **Components** and **Inspect**: the detailed evidence for you. Select any value to highlight it on the page.
+6. **Components** opens with **Side by side**: every style of each kind of element (buttons, inputs, badges, links, headings) redrawn from the page in a grid, numbered, with near-copies ("Copy of #1") and one-offs marked. Select a tile to find it on the page.
+7. **Foundations** opens with **Your design system, extracted**: the product's own colours, text sizes, weights, fonts, spacing, corners and shadows turned into a starter set of tokens, with near-copies merged and stray values mapped to the nearest step. Download it as CSS variables or design-token JSON (W3C format, readable by Tokens Studio and Style Dictionary).
+8. **Overview** includes an **Accessibility check**: six automated WCAG checks (text contrast 1.4.3, visible focus 2.4.7, named controls 4.1.2, form labels 1.3.1, alt text 1.1.1 and tap-target size 2.5.8 from WCAG 2.2), each with pass/fail, who it affects and a link to the offending elements. It names what still needs a manual review, so it never reads as a certificate.
+9. **Inspect**: the detailed evidence for any element. Select any value to highlight it on the page.
 
 **Client report.** Set your agency, name, contact details and an optional personal note once under `⋯` → *Report details…*. The client name comes from the page and can be changed per site. Then press **Download PDF report**. The report contains:
 
@@ -54,7 +57,8 @@ The one-time setup for both is in [docs/RELEASING.md](docs/RELEASING.md).
   - two charts: *where the cost comes from* and *health by area*;
   - "Something you may not know".
 - **Part 1, the problems.** A problem map grouped into tokens and styles, components and elements, with the number of problems, places affected and cost for each group. Then a summary table (problem, what it affects, places, cost a year, priority) and one compact card per problem: three headline numbers, the evidence (swatches, sizes, contrast samples, look-alike components) and where it was seen.
-- **Part 2, the fixes.** One row per problem with the fix and what it realistically saves a year, an *after the cleanup* chart (styles today versus after) and the redesign hours with and without tokens.
+- **Part 1** also shows **your components, side by side** (the kinds with too many styles or near-copies) and the **accessibility check**, criterion by criterion, with the regulation context.
+- **Part 2, the fixes.** One row per problem with the fix and what it realistically saves a year, an *after the cleanup* chart (styles today versus after), the redesign hours with and without tokens, and **your design system, extracted**: swatches and token tables, with an offer to send the token file.
 - **Part 3, what's working well.** The areas and building blocks that are already consistent.
 - **Appendix:** pages reviewed, how we worked it out, a glossary, and a short *How we can help* note with your contact details.
 

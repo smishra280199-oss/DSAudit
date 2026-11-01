@@ -12,6 +12,8 @@
 import type { Audit } from '../audit';
 import { assumptionsLine, buildBusinessCase, consistencyLevel, type BusinessCase, type RankedOpportunity } from '../business';
 import { summarise } from '../insights';
+import { starterSystem } from '../insights/starter-system';
+import { accessibilityReport } from '../insights/wcag';
 import type { AreaKey } from '../inference/types';
 import { formatMoney } from '../savings';
 import { hasContact, type ClientReportOptions } from './branding';
@@ -95,6 +97,9 @@ export function executiveMarkdown(audit: Audit, options: ClientReportOptions): s
     lines.push('', '## Cost of a typical change', '', ...b.typicalChanges.map((c) => `- **${c.label}:** ${c.today} ${c.unit} today → ${c.after} after (−${pct(c.today, c.after)}%)`));
   }
   if (b.highlights.length) lines.push('', '## What we found', '', ...b.highlights.map((x) => `- ${x.warning ? '⚠️ ' : ''}${x.text}`));
+  lines.push('', `**Accessibility:** ${accessibilityReport(audit).headline}`);
+  const system = starterSystem(audit, summary.clientName);
+  if (system.tokens.length) lines.push('', `**Your design system, extracted:** the ${system.before} values in use today map onto ${system.after} named tokens. We can send the ready-to-use token file.`);
   if (b.nextSteps.items.length) {
     lines.push(
       '',
@@ -129,9 +134,23 @@ export function detailedMarkdown(audit: Audit, options: ClientReportOptions): st
     '| --- | ---: |',
     ...audit.score.areas.filter((x) => x.applicable).map((x) => `| ${x.label} | ${x.score} |`),
     '',
+    '## Accessibility check',
+    '',
+    '| Check | WCAG | Result |',
+    '| --- | --- | --- |',
+    ...accessibilityReport(audit).checks.map((c) => `| ${c.name} | ${c.sc} (${c.level}) | ${c.status === 'fail' ? `Fails: ${c.failed} of ${c.checked}` : c.status === 'pass' ? `Passes (${c.checked} checked)` : 'Nothing to check'} |`),
+    '',
     '# Opportunities, ordered by impact',
     '',
     ...b.ranked.flatMap((r) => [opportunityTask(r, audit), '']),
+    '## Starter design tokens',
+    '',
+    'Extracted from the live product: near-copies merged, stray values mapped to the nearest step. Review before adopting.',
+    '',
+    '```css',
+    starterSystem(audit, options.clientName).css,
+    '```',
+    '',
     '## Limits of this audit',
     '',
     ...analysis.confidence.reasons.map((r) => `- ${r}`),

@@ -119,12 +119,22 @@ function scoreInteraction(a: AuditAnalysis): ScorerResult {
 function scoreAccessibility(a: AuditAnalysis): ScorerResult {
   const { textChecked, contrastFailures, unnamedControls, controlsChecked } = a.accessibility;
   if (textChecked === 0 && controlsChecked === 0) return { score: 100, applicable: false, notes: ['No text or controls.'] };
-  const contrast = textChecked ? 1 - contrastFailures.length / textChecked : 1;
-  const naming = controlsChecked ? 1 - unnamedControls.length / controlsChecked : 1;
+  const share = (failed: number, checked: number) => (checked ? 1 - failed / checked : 1);
+  const contrast = share(contrastFailures.length, textChecked);
+  const naming = share(unnamedControls.length, controlsChecked);
+  const labels = share(a.accessibility.unlabelledFields?.length ?? 0, a.accessibility.fieldsChecked ?? 0);
+  const targets = share(a.accessibility.smallTargets?.length ?? 0, a.accessibility.targetsChecked ?? 0);
+  const alt = share(a.accessibility.imagesWithoutAlt?.length ?? 0, a.accessibility.imagesChecked ?? 0);
   return {
-    score: clamp(contrast * 70 + naming * 30),
+    score: clamp(contrast * 50 + naming * 15 + labels * 15 + targets * 10 + alt * 10),
     applicable: true,
-    notes: [`${contrastFailures.length} of ${textChecked} text elements below AA`, count(unnamedControls.length, 'unnamed control')],
+    notes: [
+      `${contrastFailures.length} of ${textChecked} text elements below AA`,
+      count(unnamedControls.length, 'unnamed control'),
+      count(a.accessibility.unlabelledFields?.length ?? 0, 'unlabelled field'),
+      count(a.accessibility.smallTargets?.length ?? 0, 'small tap target'),
+      count(a.accessibility.imagesWithoutAlt?.length ?? 0, 'image without alt text'),
+    ],
   };
 }
 

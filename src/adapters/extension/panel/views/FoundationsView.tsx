@@ -6,6 +6,7 @@ import { ValueList } from '../components/ValueList';
 import { useNavigation, type FoundationSegment } from '../navigation';
 import { useAuditState, useController } from '../use-audit';
 import { TokensSection } from './TokensSection';
+import { StarterSystemCard } from './Showcase';
 
 const SEGMENTS: { value: FoundationSegment; label: string }[] = [
   { value: 'color', label: 'Color' },
@@ -24,6 +25,7 @@ export function FoundationsView() {
 
   return (
     <div className="stack">
+      <StarterSystemCard />
       <Segmented fill label="Foundation" options={SEGMENTS} value={foundation} onChange={(f) => go('foundations', f)} />
       {foundation === 'tokens' ? <TokensSection /> : <Foundation foundation={audit.analysis.foundations[foundation]} />}
     </div>

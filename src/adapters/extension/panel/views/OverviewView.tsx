@@ -12,6 +12,7 @@ import { Badge, Button, Card, ChevronRightIcon, EyeOffIcon, FileIcon, InfoIcon, 
 import { Stat, StatStrip } from '../components/Stat';
 import { useNavigation } from '../navigation';
 import { ImpactEffortMatrix } from './OpportunitiesView';
+import { AccessibilityCard } from './Showcase';
 import { useAuditState, useController } from '../use-audit';
 import { useReports } from '../use-reports';
 
@@ -206,6 +207,8 @@ export function OverviewView() {
           ))}
         </List>
       </Card>
+
+      <AccessibilityCard />
 
       <Card title="About this capture" action={<Badge tone={CONFIDENCE_TONE[analysis.confidence.level]}>{CONFIDENCE_LABEL[analysis.confidence.level]}</Badge>}>
         <ul className="reasons">

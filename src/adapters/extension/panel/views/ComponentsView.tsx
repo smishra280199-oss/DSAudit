@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import type { ComponentAnalysis, ComponentKind, ComponentVariant } from '../../../../inference/types';
 import { Badge, Card, ChevronDownIcon, ChevronRightIcon, EmptyState, ComponentsIcon, List, Row } from '../ui';
 import { useAuditState, useController } from '../use-audit';
+import { ComponentGallery } from './Showcase';
 
 /** Recreates a variant from its captured styles so it can be compared at a glance. */
 function previewStyle(kind: ComponentKind, v: ComponentVariant): CSSProperties {
@@ -97,6 +98,7 @@ export function ComponentsView() {
   }
   return (
     <div className="stack">
+      <ComponentGallery />
       <p className="muted intro">Instances are grouped into variants by the properties that define their look. Select a variant to find it on the page.</p>
       {present.map((c) => (
         <ComponentGroup key={c.kind} component={c} />
