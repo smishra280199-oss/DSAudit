@@ -27,6 +27,7 @@ export const COLORS = {
   warningSoft: hex('#fdf4e3'),
   success: hex('#2a9d3e'),
   successSoft: hex('#e8f8eb'),
+  info: hex('#3b82f6'),
   white: hex('#ffffff'),
 };
 

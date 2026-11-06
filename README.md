@@ -34,7 +34,8 @@ The one-time setup for both is in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Using it
 
-1. **Capture page** (or press `C` in the panel). The first time, Chrome asks for optional access to all sites. Without it, only the tab you opened the panel on can be read and cross-origin stylesheets are skipped.
+1. **Capture page** (or press `C` in the panel). After reading the page, System Audit scrolls through it and **photographs every element the report cites**: one example of each component style, each text size, near-copy colours and every accessibility failure. Sticky headers and cookie banners are hidden for each shot and the page is put back as it was. Text contrast is then re-checked against the real pixels behind the letters, so text on photos or dark panels isn't misreported. A page takes about 10–30 seconds.
+   **Capture site** (`⋯` menu) does this for up to six pages in one go: it finds the site's main pages in its navigation (one per page type, so two product pages count once), lets you tick or add pages, visits each in this tab, then audits them together and returns to where you started. The first time, Chrome asks for optional access to all sites. Without it, only the tab you opened the panel on can be read and cross-origin stylesheets are skipped.
 2. **Several pages?** Open **Pages** (key `7`) and press **Add this page** on each page as you click through the site. Then press **Audit N pages**. Findings that only show up across pages, such as a brand colour in four shades or headings built differently on two pages, are then caught. Findings say which page they were seen on, and highlighting works on whichever of those pages is open.
 3. **Overview**: what the client will read. It shows the headline cost, four key numbers, "something they may not know", the findings in report order and the stock-take. Use a finding's menu to leave it out of the report.
 4. **Opportunities** (key `4`): every change ordered by impact, with area chips, an impact filter and an impact/effort matrix where quick wins (high or medium impact, small effort) are outlined. Open one for why it matters, an at-a-glance grid (type of change, impact, effort, affected, confidence, based on), the proposed change and where it happens. **Copy as task** puts it on the clipboard as Markdown for a ticket or an AI agent.
@@ -48,19 +49,13 @@ The one-time setup for both is in [docs/RELEASING.md](docs/RELEASING.md).
 8. **Overview** includes an **Accessibility check**: six automated WCAG checks (text contrast 1.4.3, visible focus 2.4.7, named controls 4.1.2, form labels 1.3.1, alt text 1.1.1 and tap-target size 2.5.8 from WCAG 2.2), each with pass/fail, who it affects and a link to the offending elements. It names what still needs a manual review, so it never reads as a certificate.
 9. **Inspect**: the detailed evidence for any element. Select any value to highlight it on the page.
 
-**Client report.** Set your agency, name, contact details and an optional personal note once under `⋯` → *Report details…*. The client name comes from the page and can be changed per site. Then press **Download PDF report**. The report contains:
+**Client report.** Set your agency, name, contact details and an optional personal note once under `⋯` → *Report details…*. The client name comes from the page and can be changed per site. Then press **Download PDF report**. The report is a design-system health check in five short parts, organised the way a design system is built:
 
-- **Page 1, the whole picture at a glance:**
-  - a short personal note and the headline cost;
-  - four key numbers: yearly cost, could be saved, hours lost, consistency score;
-  - the business case: what a design system would have saved, how much faster new screens get, and how many months until the cleanup pays for itself (never the fix hours, which would read as a quote);
-  - two charts: *where the cost comes from* and *health by area*;
-  - "Something you may not know".
-- **Part 1, the problems.** A problem map grouped into tokens and styles, components and elements, with the number of problems, places affected and cost for each group. Then a summary table (problem, what it affects, places, cost a year, priority) and one compact card per problem: three headline numbers, the evidence (swatches, sizes, contrast samples, look-alike components) and where it was seen.
-- **Part 1** also shows **your components, side by side** (the kinds with too many styles or near-copies) and the **accessibility check**, criterion by criterion, with the regulation context.
-- **Part 2, the fixes.** One row per problem with the fix and what it realistically saves a year, an *after the cleanup* chart (styles today versus after), the redesign hours with and without tokens, and **your design system, extracted**: swatches and token tables, with an offer to send the token file.
-- **Part 3, what's working well.** The areas and building blocks that are already consistent.
-- **Appendix:** pages reviewed, how we worked it out, a glossary, and a short *How we can help* note with your contact details.
+1. **Summary.** Overall health and the three layer scores (Foundations, Components, Accessibility), the estimated yearly cost, and the three things to fix first, each with screenshots of the real elements.
+2. **Foundations** (the token layer). The real palette with near-copies marked and where each copy is used; every text size shown as a screenshot of real text at that size; a spacing ruler with off-grid values in red; corner styles; and how much of each foundation goes through tokens. Tokens are not a separate area: they are how well each foundation is managed.
+3. **Components.** Every style of every button, input, link, heading, badge and card, photographed from the site and numbered, with near-copies and one-offs marked.
+4. **Accessibility.** The WCAG checks, pass or fail, with the failing elements photographed and annotated (e.g. "1.5:1, needs 4.5").
+5. **Next steps.** The design system extracted from their product, what we'd do first, how you can help, and how the numbers were worked out.
 
 The same content is available as a web report (HTML) or a Markdown summary for emails. Tune the cost model under *Savings assumptions…*.
 

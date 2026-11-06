@@ -5,7 +5,8 @@
  * New browser capabilities go here first, then into all three.
  */
 
-import type { CapturedPage } from '../../capture';
+import type { CapturedPage, PageLink } from '../../capture';
+import type { EvidenceShot } from '../../shared/snapshot';
 import type { InspectResult } from '../../inspect/types';
 import type { KeyValueStore } from '../../storage/kv';
 
@@ -51,6 +52,17 @@ export interface Bridge {
   clearHighlights(tab: TabInfo): Promise<void>;
   setInspectMode(tab: TabInfo, on: boolean): Promise<void>;
   onInspect(listener: InspectListener): Unsubscribe;
+
+  /**
+   * Real screenshots of the given elements, keyed by selector. Scrolls the
+   * page and restores it afterwards. Elements that can't be shown are left
+   * out; an empty result means screenshots aren't available here.
+   */
+  collectEvidence(tab: TabInfo, selectors: string[], onProgress?: (done: number, total: number) => void): Promise<Record<string, EvidenceShot>>;
+  /** Links to the site's other main pages, one per page template. */
+  discoverPages(tab: TabInfo): Promise<PageLink[]>;
+  /** Loads a URL in the tab and resolves once it has finished loading (and settled). */
+  navigate(tab: TabInfo, url: string): Promise<TabInfo | null>;
 }
 
 /** Limits for stylesheets the panel fetches on the page's behalf. */

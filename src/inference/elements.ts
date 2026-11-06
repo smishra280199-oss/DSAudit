@@ -35,8 +35,10 @@ export function viewElements(snapshot: PageSnapshot): ElementView[] {
       if (value !== undefined) styles[key] = value;
     }
     Object.assign(styles, el.styles);
+    // Older snapshots recorded text at font-size 0; nobody can read it, so it isn't text.
+    const invisibleText = el.text && px(styles.fontSize) === 0;
     views.push({
-      el,
+      el: invisibleText ? { ...el, text: '' } : el,
       styles,
       subtreeHasText: el.text.length > 0,
       subtreeHasLabel: LABEL_ATTRS.some((a) => (el.attrs[a] ?? '').trim().length > 0),

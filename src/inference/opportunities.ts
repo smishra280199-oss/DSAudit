@@ -289,7 +289,8 @@ function interactionOpportunities({ interaction }: OpportunityInput): Opportunit
       id: 'interaction-focus-coverage',
       kind: 'missing-focus-style',
       area: 'interaction',
-      severity: bySeverity(1 - interaction.focusCoverage, 0.7, 0.4),
+      // The browser's own focus ring still meets WCAG: designing one is polish, never urgent.
+      severity: 'low',
       title: `${plural(missing, 'interactive element')} ${verb(missing, 'has', 'have')} no custom focus style`,
       detail: 'They rely on the browser default focus ring, which often clashes with or disappears against the design.',
       fix: 'Add one shared :focus-visible treatment (a token-driven ring) to the base interactive styles.',

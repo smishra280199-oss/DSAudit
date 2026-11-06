@@ -212,8 +212,25 @@ export interface PageSnapshot {
    * audit). Element selectors are then page-scoped; see page-scope.ts.
    */
   pages?: PageRef[];
+  /**
+   * Real screenshots of the elements a report cites, keyed by element
+   * selector (page-scoped in a multi-page audit). Taken after the DOM
+   * capture by scrolling the page; absent when screenshots weren't possible.
+   */
+  evidence?: Record<string, EvidenceShot>;
   rendered: RenderedLayer;
   authored: AuthoredLayer;
+}
+
+/** One element as it really looked on screen. */
+export interface EvidenceShot {
+  /** JPEG data URL of the element with a little margin around it. */
+  src: string;
+  /** Size of the crop in CSS pixels. */
+  w: number;
+  h: number;
+  /** Background colour seen behind the element's text, sampled from the pixels (hex). */
+  backdrop?: string;
 }
 
 /** One page inside a multi-page audit. */

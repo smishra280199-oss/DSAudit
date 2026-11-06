@@ -107,17 +107,33 @@ function imagesWithoutAlt(views: ElementView[]): { failures: AccessibilityAnalys
   return { failures, checked: images.length };
 }
 
-export function analyseAccessibility(views: ElementView[]): AccessibilityAnalysis {
+/**
+ * `pixelBackdrops` maps a selector to the background colour actually seen
+ * behind its text in a screenshot; where present it replaces the DOM guess.
+ */
+export function analyseAccessibility(views: ElementView[], pixelBackdrops?: Record<string, string>): AccessibilityAnalysis {
   const failures: ContrastIssue[] = [];
   let textChecked = 0;
+  let unverified = 0;
+  const candidates: string[] = [];
 
   for (const view of views) {
     if (!view.el.text || textChecked >= MAX_TEXT_CHECKS) continue;
     const { color, fontSize, fontWeight } = view.styles;
     if (!color || exemptFromContrast(views, view.el.index)) continue;
     textChecked += 1;
-    const result = evaluateContrast(color, backdrop(views, view.el.index), px(fontSize) ?? 16, parseInt(fontWeight ?? '400', 10));
-    if (result && !result.passesAA) failures.push({ ...result, selector: view.el.selector, text: view.el.text });
+    const measured = pixelBackdrops?.[view.el.selector];
+    const layers = measured ? [{ color: measured, hasImage: false }] : backdrop(views, view.el.index);
+    const result = evaluateContrast(color, layers, px(fontSize) ?? 16, parseInt(fontWeight ?? '400', 10));
+    if (!result || result.passesAA) continue;
+    // Below 1.5:1 text is practically invisible: no product ships that on purpose. The DOM backdrop is
+    // wrong (a photo or a panel positioned behind the text), so without real pixels we don't report it.
+    if (!measured && result.ratio < 1.5) {
+      unverified += 1;
+      if (candidates.length < 60) candidates.push(view.el.selector);
+      continue;
+    }
+    failures.push({ ...result, selector: view.el.selector, text: view.el.text, verified: Boolean(measured) });
   }
 
   const controls = views.filter(isControl);
@@ -131,6 +147,8 @@ export function analyseAccessibility(views: ElementView[]): AccessibilityAnalysi
   return {
     textChecked,
     contrastFailures: failures.sort((a, b) => a.ratio - b.ratio),
+    contrastUnverified: unverified,
+    contrastCandidates: candidates,
     unnamedControls: unnamed,
     controlsChecked: controls.length,
     smallTargets: targets.failures,

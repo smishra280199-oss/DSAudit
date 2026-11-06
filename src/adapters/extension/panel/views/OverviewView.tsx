@@ -12,7 +12,7 @@ import { Badge, Button, Card, ChevronRightIcon, EyeOffIcon, FileIcon, InfoIcon, 
 import { Stat, StatStrip } from '../components/Stat';
 import { useNavigation } from '../navigation';
 import { ImpactEffortMatrix } from './OpportunitiesView';
-import { AccessibilityCard } from './Showcase';
+import { AccessibilityCard, LayerCard } from './Showcase';
 import { useAuditState, useController } from '../use-audit';
 import { useReports } from '../use-reports';
 
@@ -97,6 +97,8 @@ export function OverviewView() {
           </Button>
         </div>
       </Card>
+
+      <LayerCard />
 
       {top.length > 0 && (
         <Card

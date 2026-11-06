@@ -9,7 +9,7 @@
 
 import type { Audit } from '../audit';
 import type { ComponentKind } from '../inference/types';
-import type { StyleKey } from '../shared/snapshot';
+import type { EvidenceShot, StyleKey } from '../shared/snapshot';
 
 export interface GalleryItem {
   /** 1-based number, as shown under the replica. */
@@ -23,6 +23,8 @@ export interface GalleryItem {
   /** Used only once or twice: likely a one-off. */
   rare: boolean;
   selectors: string[];
+  /** The real thing, photographed on the page, when screenshots were taken. */
+  shot: EvidenceShot | null;
 }
 
 export interface GalleryGroup {
@@ -39,14 +41,16 @@ export interface GalleryGroup {
 }
 
 /** Kinds that read well as replicas: they have a label and a recognisable look. */
-const SHOWN: ComponentKind[] = ['button', 'input', 'badge', 'link', 'heading'];
-const NOUNS: Partial<Record<ComponentKind, string>> = { button: 'button', input: 'input', badge: 'badge', link: 'link', heading: 'heading' };
+const SHOWN: ComponentKind[] = ['button', 'input', 'badge', 'link', 'heading', 'card'];
+const NOUNS: Partial<Record<ComponentKind, string>> = { button: 'button', input: 'input', badge: 'badge', link: 'link', heading: 'heading', card: 'card' };
 const MAX_ITEMS = 12;
 
 export function componentGallery(audit: Audit): GalleryGroup[] {
   const groups: GalleryGroup[] = [];
   for (const component of audit.analysis.components) {
     if (!SHOWN.includes(component.kind) || component.variants.length < 2) continue;
+    // Cards only read well as photographs: a redrawn empty box says nothing.
+    if (component.kind === 'card' && !component.variants.some((v) => audit.snapshot.evidence?.[v.selectors[0] ?? ''])) continue;
     const noun = NOUNS[component.kind]!;
     const line = audit.savings.lines.find((l) => l.key === `component-${component.kind}`);
     const needed = line?.recommended ?? Math.min(component.variants.length, component.target);
@@ -61,6 +65,7 @@ export function componentGallery(audit: Audit): GalleryGroup[] {
       copyOf: twin.has(i) ? twin.get(i)! + 1 : null,
       rare: v.count === 1 && i >= needed,
       selectors: v.selectors,
+      shot: audit.snapshot.evidence?.[v.selectors[0] ?? ''] ?? null,
     }));
     const copies = items.filter((x) => x.copyOf !== null).length;
     const styles = component.variants.length;
@@ -78,7 +83,7 @@ export function componentGallery(audit: Audit): GalleryGroup[] {
 
 const cap = (value: string | undefined, max: number): string | undefined => {
   const n = value ? parseFloat(value) : NaN;
-  return Number.isFinite(n) ? `${Math.min(n, max)}px` : undefined;
+  return Number.isFinite(n) && n > 0 ? `${Math.min(n, max)}px` : undefined;
 };
 
 /**

@@ -13,9 +13,14 @@ import { Overlay, pageRect } from './overlay';
 import { walkRendered } from './rendered';
 import { resolveSelector } from './selector';
 import { collectSheets, listUnreadableSheets, type FetchedSheet } from './stylesheets';
+import { discoverPages, type PageLink } from './discover';
+import { ShotSession, type Frame } from './shots';
+
+export type { Frame, ShotTarget } from './shots';
+export type { PageLink } from './discover';
 
 /** Bumped when the API changes so a stale injected copy gets replaced. */
-export const CAPTURE_API_VERSION = 1;
+export const CAPTURE_API_VERSION = 2;
 
 /** The snapshot fields capture can know; the panel adds id, favicon and host access. */
 export type CapturedPage = Omit<PageSnapshot, 'id' | 'favIconUrl' | 'hostAccess'>;
@@ -28,6 +33,12 @@ export interface CaptureApi {
   highlight(selectors: string[], label?: string): number;
   clearHighlights(): void;
   setInspectMode(on: boolean): void;
+  /** Evidence screenshots: see shots.ts. Call frame() repeatedly, endFrame() after each screenshot, finishShots() at the end. */
+  frame(selectors: string[], focus: string): Promise<Frame>;
+  endFrame(): void;
+  finishShots(): void;
+  /** Links to the site's main pages, for capturing several pages in one go. */
+  discoverPages(): PageLink[];
 }
 
 export interface CaptureCallbacks {
@@ -41,6 +52,7 @@ export function createCaptureApi(doc: Document, callbacks: CaptureCallbacks): Ca
   const win = doc.defaultView!;
   const overlay = new Overlay(doc);
   let lastFetched: FetchedSheet[] = [];
+  let shots: ShotSession | null = null;
 
   const inspectMode = new InspectMode(doc, {
     onPick: (el) => {
@@ -84,5 +96,18 @@ export function createCaptureApi(doc: Document, callbacks: CaptureCallbacks): Ca
     clearHighlights: () => overlay.clear(),
 
     setInspectMode: (on) => inspectMode.set(on),
+
+    frame(selectors, focus) {
+      overlay.clear();
+      shots ??= new ShotSession(doc);
+      return shots.frame(selectors, focus);
+    },
+    endFrame: () => shots?.endFrame(),
+    finishShots() {
+      shots?.finish();
+      shots = null;
+    },
+
+    discoverPages: () => discoverPages(doc),
   };
 }

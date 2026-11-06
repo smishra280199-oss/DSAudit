@@ -4,6 +4,8 @@ import { CaptureGate } from './components/CaptureGate';
 import { Header } from './components/Header';
 import { ReportDetailsDialog } from './components/ReportDetailsDialog';
 import { SettingsDialog } from './components/SettingsDialog';
+import { SiteCaptureDialog } from './components/SiteCaptureDialog';
+import { CaptureProgress } from './components/CaptureProgress';
 import { TabBar, TABS } from './components/TabBar';
 import { NavigationContext, type FoundationSegment, type Navigation, type ReportVersion, type ViewKey } from './navigation';
 import { useAuditState, useController } from './use-audit';
@@ -36,6 +38,7 @@ export function App() {
   const [foundation, setFoundation] = useState<FoundationSegment>('color');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [siteOpen, setSiteOpen] = useState(false);
   const [focusedOpportunity, setFocusedOpportunity] = useState<string | null>(null);
   const [reportVersion, setReportVersion] = useState<ReportVersion>('executive');
 
@@ -60,6 +63,7 @@ export function App() {
         setView('report');
       },
       openSettings: () => setSettingsOpen(true),
+      openSiteCapture: () => setSiteOpen(true),
       openReportDetails: () => setDetailsOpen(true),
     }),
     [view, foundation, go, focusedOpportunity, reportVersion],
@@ -68,7 +72,7 @@ export function App() {
   // Panel shortcuts: C capture, I inspect, 1–7 switch views.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target) || settingsOpen || detailsOpen) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target) || settingsOpen || detailsOpen || siteOpen) return;
       const key = event.key.toLowerCase();
       if (key === 'c') void controller.capture();
       else if (key === 'i') {
@@ -78,7 +82,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [controller, settingsOpen, detailsOpen]);
+  }, [controller, settingsOpen, detailsOpen, siteOpen]);
 
   // Leaving Inspect turns Inspect mode off so the page behaves normally again.
   useEffect(() => {
@@ -94,12 +98,14 @@ export function App() {
     <NavigationContext.Provider value={navigation}>
       <div className="panel">
         <Header />
+        <CaptureProgress />
         <main className="panel__content" id="main">
           {current.needsAudit ? <CaptureGate>{current.render()}</CaptureGate> : current.render()}
         </main>
         <TabBar />
         <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
         <ReportDetailsDialog open={detailsOpen} onClose={() => setDetailsOpen(false)} />
+        <SiteCaptureDialog open={siteOpen} onClose={() => setSiteOpen(false)} />
         {toast && <Toast message={toast} />}
       </div>
     </NavigationContext.Provider>

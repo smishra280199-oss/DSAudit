@@ -5,7 +5,7 @@
  * measured from the top of the page, as in CSS.
  */
 
-import type { PDFDocument, PDFFont, PDFPage, RGB } from 'pdf-lib';
+import type { PDFDocument, PDFFont, PDFImage, PDFPage, RGB } from 'pdf-lib';
 import { COLORS, PAGE } from './theme';
 
 export interface Fonts {
@@ -185,6 +185,12 @@ export class Layout {
     if (!this.dry) this.page.drawCircle({ x: x + 2.5, y: PAGE.height - top - size * 0.55, size: 2.5, color });
     this.text(label, x + 9, top, { size, color: COLORS.textSecondary }, Number.MAX_SAFE_INTEGER);
     return 9 + this.textWidth(label, { size });
+  }
+
+  /** Draws an embedded image with its top-left corner at (x, top). */
+  image(img: PDFImage, x: number, top: number, width: number, height: number): void {
+    if (this.dry) return;
+    this.page.drawImage(img, { x, y: PAGE.height - top - height, width, height });
   }
 
   /** A colour sample. */

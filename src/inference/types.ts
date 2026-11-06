@@ -136,11 +136,17 @@ export interface TokenAnalysis {
 export interface ContrastIssue extends ContrastResult {
   selector: string;
   text: string;
+  /** True when the background was read from real pixels rather than inferred from the DOM. */
+  verified?: boolean;
 }
 
 export interface AccessibilityAnalysis {
   textChecked: number;
   contrastFailures: ContrastIssue[];
+  /** Text that looked unreadable from the DOM alone but whose real background couldn't be confirmed. */
+  contrastUnverified: number;
+  /** Selectors of that text, to check against a real screenshot. */
+  contrastCandidates: string[];
   unnamedControls: { selector: string; tag: string }[];
   controlsChecked: number;
   /** WCAG 2.2 SC 2.5.8: targets under 24×24 px with no room around them. */

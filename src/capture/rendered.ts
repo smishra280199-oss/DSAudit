@@ -159,7 +159,8 @@ export function walkRendered(doc: Document): RenderedWalk {
       selector: shortSelector(el),
       classes: [...el.classList],
       attrs,
-      text: ownText(el),
+      // font-size: 0 is a layout trick (killing inline-block gaps): its text is invisible.
+      text: parseFloat(computed.fontSize) === 0 ? '' : ownText(el),
       rect: {
         x: Math.round(box.left + win.scrollX),
         y: Math.round(box.top + win.scrollY),

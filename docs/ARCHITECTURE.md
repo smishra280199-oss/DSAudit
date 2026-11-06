@@ -48,6 +48,10 @@ Nothing is injected in advance: the manifest declares no content scripts.
 - **Confidence**: everything the capture could not see.
 - **Opportunities**: one rule per concern, ranked by severity, each with rough effort hours.
 
+## Evidence screenshots
+
+After the DOM capture, `insights/evidence-plan.ts` picks the elements the report will cite (one per component style and text size, near-copy colours, contrast candidates and accessibility failures) in page order. `adapters/bridge/evidence.ts` drives `capture/shots.ts` frame by frame: the page scrolls a target to the middle, hides fixed and sticky layers that don't contain it, and reports every requested element that is fully visible and uncovered; the panel screenshots the tab (`captureVisibleTab`, at most about two a second) and crops each one. Plain text is cropped to its text box, boxed elements to their border box. For text, the most common non-text colour inside the box is stored as `backdrop`, and `analyseAccessibility` uses it instead of the DOM's guess. Crops live on `snapshot.evidence`, keyed by selector (page-scoped after a merge).
+
 ## Multi-page audits
 
 Each page is captured and saved as its own snapshot. The Pages view keeps an ordered list of them (`collection:pages` in storage). **Audit N pages** loads them and calls `mergeSnapshots()` (`src/audit/merge.ts`), which produces one ordinary `PageSnapshot`:

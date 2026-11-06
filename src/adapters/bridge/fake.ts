@@ -3,7 +3,8 @@
  * call so tests can assert on what the panel asked the browser to do.
  */
 
-import type { CapturedPage } from '../../capture';
+import type { CapturedPage, PageLink } from '../../capture';
+import type { EvidenceShot } from '../../shared/snapshot';
 import type { InspectResult } from '../../inspect/types';
 import { MemoryStore } from '../../storage/kv';
 import type { Bridge, InspectListener, TabInfo } from './types';
@@ -85,6 +86,30 @@ export class FakeBridge implements Bridge {
   onInspect(listener: InspectListener) {
     this.inspectListeners.add(listener);
     return () => this.inspectListeners.delete(listener);
+  }
+
+  /** Test helper: the screenshots collectEvidence returns and the links discoverPages finds. */
+  evidence: Record<string, EvidenceShot> = {};
+  links: PageLink[] = [];
+  /** Test helper: what each URL captures as, for navigate(). */
+  pagesByUrl: Record<string, CapturedPage> = {};
+
+  async collectEvidence(tab: TabInfo, selectors: string[]) {
+    this.record('collectEvidence', tab.id, selectors.length);
+    return Object.fromEntries(Object.entries(this.evidence).filter(([s]) => selectors.includes(s)));
+  }
+
+  async discoverPages(tab: TabInfo) {
+    this.record('discoverPages', tab.id);
+    return this.links;
+  }
+
+  async navigate(tab: TabInfo, url: string) {
+    this.record('navigate', tab.id, url);
+    this.tab = { ...tab, url };
+    if (this.pagesByUrl[url]) this.page = { ...this.pagesByUrl[url]!, url };
+    else this.page = { ...this.page, url };
+    return this.tab;
   }
 
   /** Test helper: simulate the user picking an element in Inspect mode. */

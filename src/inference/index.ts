@@ -37,7 +37,12 @@ export function analyse(snapshot: PageSnapshot): AuditAnalysis {
     hoverCoverage: coverage.interactiveCount ? coverage.withHover / coverage.interactiveCount : null,
     focusCoverage: coverage.interactiveCount ? coverage.withFocus / coverage.interactiveCount : null,
   };
-  const accessibility = analyseAccessibility(views);
+  const backdrops = Object.fromEntries(
+    Object.entries(snapshot.evidence ?? {})
+      .filter(([, shot]) => shot.backdrop)
+      .map(([selector, shot]) => [selector, shot.backdrop!]),
+  );
+  const accessibility = analyseAccessibility(views, backdrops);
   const naming = snapshot.authored.classNaming;
 
   return {
