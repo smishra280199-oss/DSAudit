@@ -71,6 +71,13 @@ export function mergeSnapshots(snapshots: PageSnapshot[], id: string, title: str
     hostAccess: snapshots.every((s) => s.hostAccess),
     screenshot: first.screenshot,
     pages,
+    evidenceReport: snapshots.some((s) => s.evidenceReport)
+      ? {
+          planned: snapshots.reduce((n, s) => n + (s.evidenceReport?.planned ?? 0), 0),
+          taken: snapshots.reduce((n, s) => n + (s.evidenceReport?.taken ?? 0), 0),
+          error: snapshots.find((s) => s.evidenceReport?.error)?.evidenceReport?.error,
+        }
+      : undefined,
     evidence: Object.fromEntries(
       snapshots.flatMap((s, page) => Object.entries(s.evidence ?? {}).map(([selector, shot]) => [scopeSelector(page, selector), shot])),
     ),

@@ -129,6 +129,7 @@ export async function collectEvidence(
     for (let frames = 0; remaining.length > 0 && frames < MAX_FRAMES; frames += 1) {
       const focus = remaining[0]!;
       const frame = await driver.frame(remaining, focus);
+      if (!frame || !Array.isArray(frame.targets)) throw new Error('The page did not answer the screenshot request. Reload the page and capture again.');
       if (frame.targets.length === 0) {
         await driver.endFrame();
         remaining = remaining.slice(1);

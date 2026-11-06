@@ -100,11 +100,18 @@ export function LayerCard() {
   const report = useMemo(() => (audit ? healthReport(audit, { clientName: name, dismissed }) : null), [audit, name, dismissed]);
   if (!report) return null;
   const shots = Object.keys(audit?.snapshot.evidence ?? {}).length;
+  const ev = audit?.snapshot.evidenceReport;
+  const failed = ev && (ev.error || ev.taken < ev.planned / 2);
   return (
     <Card
       title={`Design system health: ${report.overall.score}/100`}
-      subtitle={`${report.overall.level}. ${shots ? `${shots} elements photographed for the report.` : 'No screenshots in this capture: the report redraws elements instead.'}`}
+      subtitle={`${report.overall.level}. ${ev ? `${ev.taken} of ${ev.planned} elements photographed for the report.` : shots ? `${shots} elements photographed for the report.` : 'No screenshots in this capture.'}`}
     >
+      {failed && (
+        <p className="evidence-warning" role="alert">
+          Screenshots didn’t work for this capture{ev?.error ? `: ${ev.error}` : '.'} The report will redraw elements instead of showing them. Capture again; if it keeps failing, allow access to all sites from the ⋯ menu.
+        </p>
+      )}
       <div className="layer-grid">
         {report.layers.map((l) => (
           <div key={l.key} className="layer-tile">

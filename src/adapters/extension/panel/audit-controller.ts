@@ -12,7 +12,7 @@ import { selectorsForPage } from '../../../shared/page-scope';
 import type { InspectResult } from '../../../inspect/types';
 import { DEFAULT_ASSUMPTIONS, type SavingsAssumptions } from '../../../savings';
 import { capturability, type CapturabilityReason } from '../../../shared/restricted';
-import type { PageSnapshot, SnapshotMeta } from '../../../shared/snapshot';
+import type { EvidenceShot, PageSnapshot, SnapshotMeta } from '../../../shared/snapshot';
 import { defaultClientName, EMPTY_BRANDING, type ClientReportOptions, type ReportBranding } from '../../../report/branding';
 import { hostOf } from '../../../report/format';
 import {
@@ -210,13 +210,18 @@ export class AuditController {
     const plan = planEvidence(audit);
     if (plan.length > 0) {
       this.set({ progress: `${label}Taking screenshots…` });
-      const evidence = await this.bridge
-        .collectEvidence(tab, plan, (done, total) => this.set({ progress: `${label}Screenshots ${done} of ${total}` }))
-        .catch(() => ({}));
-      if (Object.keys(evidence).length > 0) {
-        snapshot = { ...snapshot, evidence };
-        audit = runAudit(snapshot, this.state.assumptions!);
+      let evidence: Record<string, EvidenceShot> = {};
+      let error: string | undefined;
+      try {
+        evidence = await this.bridge.collectEvidence(tab, plan, (done, total) => this.set({ progress: `${label}Screenshots ${done} of ${total}` }));
+      } catch (e) {
+        // Never silently: the report and the panel say screenshots failed, and why.
+        error = e instanceof Error ? e.message : String(e);
       }
+      const taken = Object.keys(evidence).length;
+      if (taken === 0 && !error && this.bridge.kind === 'chrome') error = 'No element could be photographed: the page may have blocked screenshots, or site access was not granted.';
+      snapshot = { ...snapshot, evidence, evidenceReport: { planned: plan.length, taken, error } };
+      audit = runAudit(snapshot, this.state.assumptions!);
     }
     await this.store.save(snapshot, audit.score.overall);
     return { audit, hostAccess };
