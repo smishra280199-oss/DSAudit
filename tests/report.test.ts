@@ -31,10 +31,11 @@ describe('client reports', () => {
     const html = auditToHtml(audit, options);
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('Acme &amp; Co');
-    expect(html).toContain('We estimate inconsistency costs your team');
+    expect(html).toContain('estimated yearly cost of inconsistency');
     expect(html).toContain('Fix these three first');
     // The three layers, then next steps, in order.
-    expect(html).toMatch(/2 of 5[\s\S]*<h2>Foundations[\s\S]*3 of 5[\s\S]*<h2>Components[\s\S]*4 of 5[\s\S]*<h2>Accessibility[\s\S]*5 of 5[\s\S]*<h2>Your design system, extracted/);
+    // Summary, what we looked at, priority fixes, foundations, components, accessibility, where a design system helps.
+    expect(html).toMatch(/2 of 7[\s\S]*<h2>What we looked at[\s\S]*<h2>Foundations[\s\S]*<h2>Components[\s\S]*<h2>Accessibility[\s\S]*7 of 7[\s\S]*<h2>Where a design system helps/);
     expect(html).not.toMatch(/payback|one-time cleanup|cleanup cost/i);
     expect(html).toContain('How Northbeam Studio can help');
     expect(html).toContain('sam@northbeam.test');

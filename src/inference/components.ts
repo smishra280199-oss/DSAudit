@@ -28,6 +28,13 @@ function hasSurface(styles: ElementView['styles']): boolean {
   return Boolean(styles.backgroundColor || styles.boxShadow || styles.borderTopWidth || styles.backgroundImage);
 }
 
+/** Tabs, menu items and options: controls with their own role, styled differently from buttons by design. */
+const NAV_ROLES = new Set(['tab', 'menuitem', 'menuitemradio', 'menuitemcheckbox', 'option', 'treeitem']);
+
+function isNavItem({ el }: ElementView): boolean {
+  return NAV_ROLES.has(el.attrs.role ?? '');
+}
+
 function looksLikeButton({ el, styles }: ElementView): boolean {
   if (el.tag === 'button' || el.attrs.role === 'button') return true;
   if (el.tag === 'input' && BUTTON_INPUT_TYPES.has(el.attrs.type ?? '')) return true;
@@ -48,7 +55,24 @@ export const COMPONENT_KINDS: KindDefinition[] = [
     label: 'Buttons',
     target: 6,
     signature: ['backgroundColor', 'color', 'borderTopColor', 'borderTopLeftRadius', 'fontSize', 'fontWeight', 'paddingLeft'],
-    matches: looksLikeButton,
+    // Buttons with a visible label. Icon-only buttons and tabs are their own kinds, judged on their own.
+    matches: (view) => looksLikeButton(view) && !isNavItem(view) && view.subtreeHasText,
+  },
+  {
+    kind: 'icon-button',
+    sized: true,
+    label: 'Icon buttons',
+    target: 4,
+    signature: ['backgroundColor', 'color', 'borderTopColor', 'borderTopLeftRadius'],
+    matches: (view) => looksLikeButton(view) && !isNavItem(view) && !view.subtreeHasText,
+  },
+  {
+    kind: 'tab',
+    sized: true,
+    label: 'Tabs & menu items',
+    target: 4,
+    signature: ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'borderTopLeftRadius'],
+    matches: isNavItem,
   },
   {
     kind: 'input',
@@ -65,7 +89,7 @@ export const COMPONENT_KINDS: KindDefinition[] = [
     label: 'Links',
     target: 4,
     signature: ['color', 'fontWeight'],
-    matches: (view) => view.el.tag === 'a' && view.el.attrs.href !== undefined && !looksLikeButton(view) && view.subtreeHasText,
+    matches: (view) => view.el.tag === 'a' && view.el.attrs.href !== undefined && !looksLikeButton(view) && !isNavItem(view) && view.subtreeHasText,
   },
   {
     kind: 'heading',

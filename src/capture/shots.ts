@@ -98,6 +98,8 @@ export class ShotSession {
   private readonly startY: number;
   private readonly startX: number;
   private hidden: HTMLElement[] = [];
+  /** Scrollable containers we moved, with where they were, so finish() can put them back. */
+  private readonly scrolled = new Map<Element, { top: number; left: number }>();
 
   constructor(private readonly doc: Document) {
     const win = doc.defaultView!;
@@ -121,7 +123,13 @@ export class ShotSession {
       el.style.setProperty('visibility', 'hidden', 'important');
       this.hidden.push(el);
     }
-    if (!focusLayer) focusEl.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' as ScrollBehavior });
+    for (let node = focusEl.parentElement; node && node !== this.doc.documentElement; node = node.parentElement) {
+      if (!this.scrolled.has(node) && (node.scrollHeight > node.clientHeight || node.scrollWidth > node.clientWidth)) {
+        this.scrolled.set(node, { top: node.scrollTop, left: node.scrollLeft });
+      }
+    }
+    // Scrolls the window and any scrollable container around it (app shells often scroll inside a fixed panel).
+    focusEl.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' as ScrollBehavior });
     await nextFrames(win, settleMs);
 
     const targets: ShotTarget[] = [];
@@ -154,6 +162,11 @@ export class ShotSession {
   /** Restores the page exactly as the user left it. */
   finish(): void {
     this.endFrame();
+    for (const [el, pos] of this.scrolled) {
+      el.scrollTop = pos.top;
+      el.scrollLeft = pos.left;
+    }
+    this.scrolled.clear();
     this.doc.defaultView!.scrollTo({ left: this.startX, top: this.startY, behavior: 'instant' as ScrollBehavior });
   }
 }

@@ -16,9 +16,11 @@ import type { AreaKey, FoundationKey } from '../inference/types';
 import { AREA_WEIGHTS } from '../scoring';
 import type { EvidenceShot } from '../shared/snapshot';
 import { componentGallery, type GalleryGroup } from './gallery';
+import { formatMoney } from '../savings';
 import { summarise, type PainPoint } from './index';
 import { starterSystem, type StarterSystem } from './starter-system';
 import { accessibilityReport, type AccessibilityReport } from './wcag';
+import { foundationDetail, type FoundationDetail } from './foundation-detail';
 
 export type LayerKey = 'foundations' | 'components' | 'accessibility';
 
@@ -44,6 +46,8 @@ export interface HealthFinding {
   point: PainPoint;
   layer: LayerKey;
   shots: Shot[];
+  /** Where exactly, as concrete lines: "Style 6 copies style 4: padding 8px → 10px". */
+  details: string[];
 }
 
 export interface TypeStep {
@@ -68,7 +72,7 @@ export interface HealthReport {
   /** The three findings to lead with: most severe first, one per layer where possible. */
   top: HealthFinding[];
   findings: HealthFinding[];
-  money: { yearlyCost: number; yearlyHours: number; savedHours: { low: number; likely: number; high: number }; recoverable: number };
+  money: { yearlyCost: number; yearlyHours: number; savedHours: { low: number; likely: number; high: number }; savedCost: number; recoverable: number; recoverableHours: number };
   quickWins: RankedOpportunity[];
   foundations: {
     colours: { total: number; copies: number; palette: ColourGroup[] };
@@ -82,6 +86,16 @@ export interface HealthReport {
   components: GalleryGroup[];
   accessibility: { report: AccessibilityReport; examples: { title: string; shots: Shot[] }[]; uncheckedText: number };
   system: StarterSystem;
+  /** Every colour, text style, spacing value and radius, with examples and token status. */
+  detail: FoundationDetail;
+  /** What we scanned and how. */
+  scan: { pages: number; elements: number; rules: number; screenshots: number; date: string; contributors: number; hourlyRate: number };
+  /** Three or four plain sentences: the headline findings. */
+  keyFindings: string[];
+  working: string[];
+  gaps: string[];
+  opportunities: string[];
+  outcomes: string[];
 }
 
 const LAYER_AREAS: Record<LayerKey, AreaKey[]> = {
@@ -175,25 +189,63 @@ export function healthReport(audit: Audit, options: { clientName: string; dismis
   ];
 
   // ── Findings with their screenshots ──
+  const failures = analysis.accessibility.contrastFailures;
+  const detailEarly = foundationDetail(audit, starterSystem(audit, summary.clientName));
   const findings: HealthFinding[] = summary.painPoints.map((point) => {
     const layer = layerOf(point);
     const kind = point.id.startsWith('component-') ? point.id.slice('component-'.length) : null;
     const group = kind ? gallery.find((g) => g.kind === kind) : undefined;
-    let shots: Shot[];
+    let shots: Shot[] = [];
+    let details: string[] = [];
     if (group) {
-      shots = group.items
-        .filter((i) => evidence[i.selectors[0] ?? ''])
-        .slice(0, 4)
-        .map((i) => ({ shot: evidence[i.selectors[0]!]!, caption: `Style ${i.n} · ${i.count}×`, flag: i.copyOf ? `copy of #${i.copyOf}` : undefined }));
+      // Show each near-copy next to the style it copies, then the rest.
+      const order = group.items.flatMap((i) => (i.copyOf ? [group.items[i.copyOf - 1]!, i] : []));
+      for (const i of [...order, ...group.items]) {
+        if (shots.length >= 4 || !i.shot || shots.some((s) => s.shot === i.shot)) continue;
+        shots.push({ shot: i.shot, caption: `Style ${i.n} · used ${i.count}×`, flag: i.copyOf ? `copy of #${i.copyOf}` : undefined });
+      }
+      details = group.items
+        .filter((i) => i.copyOf)
+        .slice(0, 3)
+        .map((i) => `Style ${i.n} is a near-copy of style ${i.copyOf}${i.diff.length ? `: ${i.diff.join(', ')}` : ''}.`);
+      const once = group.items.filter((i) => i.rare).length;
+      if (group.styles > group.needed) details.unshift(`${group.styles} ${group.noun} styles where about ${group.needed} would do${once ? `; ${once} are used only once` : ''}.`);
     } else if (point.id === 'contrast') {
-      shots = analysis.accessibility.contrastFailures
+      shots = failures
         .filter((f) => evidence[f.selector])
         .slice(0, 4)
         .map((f) => ({ shot: evidence[f.selector]!, caption: `${f.foreground} on ${f.background}`, flag: `${f.ratio}:1` }));
+      // Group by colour pair: most failures come from a handful of colour choices.
+      const pairs = new Map<string, { n: number; text: string; ratio: number }>();
+      for (const f of failures) {
+        const key = `${f.foreground} on ${f.background}`;
+        const p = pairs.get(key) ?? { n: 0, text: f.text, ratio: f.ratio };
+        p.n += 1;
+        pairs.set(key, p);
+      }
+      details = [...pairs.entries()]
+        .sort((a, b) => b[1].n - a[1].n)
+        .slice(0, 3)
+        .map(([pair, p]) => `${pair} (${p.ratio}:1, needs ${failures[0]?.largeText ? 3 : 4.5}:1) in ${p.n} ${p.n === 1 ? 'place' : 'places'}, e.g. “${p.text.slice(0, 30)}”.`);
+    } else if (point.id === 'type-sizes' || point.id === 'spacing' || point.id === 'colours') {
+      const rows = point.id === 'type-sizes' ? detailEarly.textStyles : point.id === 'spacing' ? detailEarly.spacing : detailEarly.colours;
+      shots = rows
+        .filter((r) => r.flag !== 'ok' && r.examples.length)
+        .slice(0, 4)
+        .map((r) => ({ shot: r.examples[0]!.shot, caption: `${r.value} · ${r.count}×`, flag: r.flag === 'near-copy' ? 'near-copy' : r.flag === 'off-scale' ? 'off scale' : 'one-off' }));
+      const e = point.evidence;
+      if (e.kind === 'values') details = [`Values off the system: ${e.items.filter((i) => i.flagged).slice(0, 8).map((i) => `${i.value} (${i.count}×)`).join(', ')}.`];
+      else if (e.kind === 'colours') details = e.groups.slice(0, 3).map((g) => `${g.copies.join(', ')} ${g.copies.length === 1 ? 'is a near-copy' : 'are near-copies'} of ${g.main}.`);
     } else {
       shots = shotsFor(audit, point.selectors, () => point.affects);
+      const e = point.evidence;
+      if (e.kind === 'values') details = [`Values off the system: ${e.items.filter((i) => i.flagged).slice(0, 8).map((i) => `${i.value} (${i.count}×)`).join(', ')}.`];
+      else if (e.kind === 'colours') details = e.groups.slice(0, 3).map((g) => `${g.copies.join(', ')} ${g.copies.length === 1 ? 'is a near-copy' : 'are near-copies'} of ${g.main}.`);
+      else if (point.id === 'targets') details = analysis.accessibility.smallTargets.slice(0, 3).map((t) => `“${t.text.slice(0, 26)}” is ${t.w}×${t.h} px, close to other controls.`);
+      else if (point.id === 'tokens') details = [`${audit.savings.retheme.literals.toLocaleString('en-US')} values are typed in by hand; a rebrand would mean editing each one.`];
     }
-    return { point, layer, shots };
+    if (point.pages.length) details.push(`Seen on ${point.pages.slice(0, 4).join(', ')}.`);
+    return { point, layer, shots, details };
   });
 
   // Lead with the most severe finding of each layer, then the next most severe overall.
@@ -225,6 +277,44 @@ export function healthReport(audit: Audit, options: { clientName: string; dismis
   const shadowLine = audit.savings.lines.find((l) => l.key === 'shadow');
   const scaleNote = sizes?.scale ? `${Math.round(sizes.scale.fit * 100)}% of text sits on one type scale` : '';
 
+  // ── The narrative: what works, where the gaps are, what's possible ──
+  const money = (n: number) => formatMoney(n, audit.assumptions.currency);
+  const system = starterSystem(audit, summary.clientName);
+  const detail = detailEarly;
+  const allRows = [...detail.colours, ...detail.textStyles, ...detail.spacing, ...detail.radii];
+  const typedWithToken = allRows.filter((r) => r.token.kind === 'typed').length;
+  const noToken = allRows.filter((r) => r.token.kind === 'none').length;
+  const tokenised = allRows.filter((r) => r.token.kind === 'token').length;
+
+  const working: string[] = [];
+  for (const g of gallery.filter((g) => !g.hasProblem && g.items.some((i) => i.count > 1))) working.push(`${g.label}: ${g.styles === 1 ? 'one style, used everywhere' : `${g.styles} clearly distinct styles`}.`);
+  for (const t of (['color', 'typography', 'spacing'] as FoundationKey[]).map((k) => analysis.foundations[k])) {
+    if (t.tokenCoverage !== null && t.tokenCoverage >= 0.7) working.push(`${t.label}: ${Math.round(t.tokenCoverage * 100)}% of it is managed with design tokens.`);
+  }
+  if ((spacingGroup?.scale?.fit ?? 0) >= 0.85) working.push(`Spacing follows a ${spacingGroup!.scale!.value}px grid in ${Math.round(spacingGroup!.scale!.fit * 100)}% of places.`);
+  if ((sizes?.values.length ?? 99) <= 8) working.push(`Type uses a short set of ${sizes!.values.length} text sizes.`);
+  const passed = access.checks.filter((c) => c.status === 'pass');
+  if (passed.length) working.push(`Accessibility: ${passed.map((c) => c.name.toLowerCase()).join(', ')} pass.`);
+  if (tokenised) working.push(`${tokenised} of the values we looked at already come from tokens.`);
+
+  const gaps = findings.filter((f) => f.point.severity !== 'low').slice(0, 5).map((f) => f.point.title.replace(/\.$/, '') + '.');
+
+  const opportunities: string[] = [];
+  if (business.quickWins.length) opportunities.push(`${business.quickWins.length} quick ${business.quickWins.length === 1 ? 'win' : 'wins'}: small changes with visible impact (${[...new Set(business.quickWins.map((q) => q.changeType.toLowerCase()))].slice(0, 3).join(', ')}).`);
+  if (typedWithToken) opportunities.push(`${typedWithToken} values are typed in by hand although a token already holds them: switching them over is mechanical and safe.`);
+  if (noToken) opportunities.push(`${noToken} values have no token yet. ${system.after} named tokens would cover everything in use today (${system.before} values now).`);
+  const merge = gallery.filter((g) => g.styles > g.needed);
+  if (merge.length) opportunities.push(`Merging near-copies: ${merge.map((g) => `${g.noun}s ${g.styles} → ${g.needed}`).join(', ')}.`);
+
+  const outcomes: string[] = [];
+  if (business.effectiveSpeedup >= 0.05) outcomes.push(`New screens: about ${Math.round(business.effectiveSpeedup * 100)}% faster to design and build, because the parts already exist.`);
+  if (audit.savings.retheme.hoursToday > audit.savings.retheme.hoursWithTokens) outcomes.push(`Visual changes: a rebrand or dark mode takes about ${Math.round(audit.savings.retheme.hoursWithTokens)} h of edits instead of ${Math.round(audit.savings.retheme.hoursToday)} h.`);
+  if (business.parts.today > business.parts.after) outcomes.push(`Less to maintain: ${business.parts.today} separately made parts become ${business.parts.after} shared ones.`);
+  outcomes.push('Accessibility by default: approved colour pairs, focus styles and target sizes live in the tokens and components, so new screens pass without extra work.');
+  if (audit.savings.annualSavings > 0) outcomes.push(`Time back: an estimated ${money(audit.savings.annualSavings)} a year of team time (planning estimate).`);
+
+  const keyFindings = layers.map((l) => `${l.label} ${l.key === 'accessibility' ? 'is' : 'are'} ${l.level.toLowerCase()} (${l.score}/100): ${l.summary.replace(/\.$/, '')}.`);
+
   return {
     clientName: summary.clientName,
     pages: summary.pages.map((p) => ({ name: p.name, url: cleanUrl(p.url) })),
@@ -236,7 +326,9 @@ export function healthReport(audit: Audit, options: { clientName: string; dismis
       yearlyCost: audit.savings.annualDragCost,
       yearlyHours: Math.round(audit.savings.annualDragHours),
       savedHours: business.avoidable,
+      savedCost: Math.round(business.avoidableCost),
       recoverable: audit.savings.annualSavings,
+      recoverableHours: Math.round(audit.savings.annualSavingsHours),
     },
     quickWins: business.quickWins.slice(0, 4),
     foundations: {
@@ -267,7 +359,22 @@ export function healthReport(audit: Audit, options: { clientName: string; dismis
     },
     components: gallery,
     accessibility: { report: access, examples, uncheckedText: a.contrastUnverified },
-    system: starterSystem(audit, summary.clientName),
+    system,
+    detail,
+    scan: {
+      pages: summary.pages.length,
+      elements: snapshot.rendered.elements.length,
+      rules: snapshot.authored.declarations.length,
+      screenshots: Object.keys(evidence).length,
+      date: snapshot.capturedAt,
+      contributors: audit.assumptions.contributors,
+      hourlyRate: audit.assumptions.hourlyRate,
+    },
+    keyFindings,
+    working: working.slice(0, 6),
+    gaps,
+    opportunities,
+    outcomes,
   };
 }
 

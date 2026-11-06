@@ -17,12 +17,12 @@ import { PDFDocument, rgb, StandardFonts, type PDFImage, type RGB } from 'pdf-li
 import type { Audit } from '../../audit';
 import type { GalleryGroup } from '../../insights/gallery';
 import { healthReport, type HealthFinding, type HealthReport, type LayerKey, type Shot } from '../../insights/health';
+import { tokenLabel, type ValueRow } from '../../insights/foundation-detail';
 import { formatMoney } from '../../savings';
 import { parseColor } from '../../shared/color';
 import type { EvidenceShot } from '../../shared/snapshot';
 import { hasContact, type ClientReportOptions } from '../branding';
 import { formatDate } from '../format';
-import { barChart } from './charts';
 import { Layout, type TextStyle } from './layout';
 import { COLORS, PAGE, TYPE } from './theme';
 
@@ -55,6 +55,7 @@ function scoreColour(score: number): RGB {
 function allShots(report: HealthReport): EvidenceShot[] {
   const shots: (EvidenceShot | null)[] = [
     ...report.top.flatMap((f) => f.shots.map((s) => s.shot)),
+    ...[...report.detail.colours, ...report.detail.textStyles, ...report.detail.spacing, ...report.detail.radii].flatMap((r) => r.examples.map((e) => e.shot)),
     ...report.components.flatMap((g) => g.items.map((i) => i.shot)),
     ...report.foundations.type.steps.map((s) => s.shot),
     ...report.foundations.colours.palette.flatMap((c) => c.copies.map((x) => x.shot)),
@@ -105,7 +106,7 @@ function card(l: Layout, content: (top: number) => number, gapAfter = 10): void 
 /** Each part opens on a new page with its layer score. */
 function partHeading(l: Layout, n: number, title: string, subtitle: string, layer?: { score: number; level: string }): void {
   l.addPage();
-  l.text(`${n} of 5`, l.left, l.y, { size: TYPE.small, color: COLORS.textSecondary });
+  l.text(`${n} of 7`, l.left, l.y, { size: TYPE.small, color: COLORS.textSecondary });
   if (layer) {
     const label = `${layer.score}/100 · ${layer.level}`;
     const w = l.textWidth(label, { size: 8 }) + 9;
@@ -117,52 +118,46 @@ function partHeading(l: Layout, n: number, title: string, subtitle: string, laye
   l.gap(14);
 }
 
-function sectionTitle(l: Layout, x: number, top: number, title: string, note: string, width: number): number {
-  let h = l.text(title, x, top, bold(11), width);
-  if (note) h += 2 + l.text(note, x, top + h + 2, small, width);
-  return h + 8;
-}
 
-// ── 1. Summary ───────────────────────────────────────────────────────────
+// ── 1. Executive summary ─────────────────────────────────────────────────
 
 async function summaryPage(l: Layout, ctx: Context): Promise<void> {
   const { report, options, audit, money } = ctx;
   const { branding } = options;
   if (branding.agencyName) l.text(branding.agencyName, l.left, l.y, bold(10.5));
   l.textRight(formatDate(audit.snapshot.capturedAt), l.left + l.width, l.y + 1, { size: TYPE.small, color: COLORS.textSecondary });
-  l.gap(28);
+  l.gap(26);
 
   const shot = audit.snapshot.screenshot ? await embed(l.pdf, audit.snapshot.screenshot) : null;
-  const shotW = shot ? 150 : 0;
+  const shotW = shot ? 140 : 0;
   const textW = l.width - (shot ? shotW + 20 : 0);
   const top = l.y;
   let y = top;
   y += l.text(report.clientName, l.left, y, { size: TYPE.display, font: 'bold', lineHeight: 30 }, textW);
-  const pages = report.pages.length === 1 ? report.pages[0]!.url : `${report.pages.length} pages: ${report.pages.map((p) => p.name).join(', ')}`;
+  const pages = report.pages.length === 1 ? report.pages[0]!.url : `${report.pages.length} pages of ${report.pages[0]!.url.split('/')[0]}`;
   y += 4 + l.text(`Design system health check · ${pages}`, l.left, y + 4, { size: TYPE.body, color: COLORS.textSecondary, lineHeight: 13 }, textW);
   if (branding.note) y += 8 + l.text(branding.note, l.left, y + 8, small, textW);
   if (shot) {
-    const h = Math.min(92, (shotW * shot.height) / shot.width);
+    const h = Math.min(84, (shotW * shot.height) / shot.width);
     l.roundedRect(l.left + l.width - shotW, top, shotW, h + 8, 6, COLORS.surface, COLORS.border);
     l.image(shot, l.left + l.width - shotW + 4, top + 4, shotW - 8, h);
     y = Math.max(y, top + h + 8);
   }
-  l.y = y + 16;
+  l.y = y + 14;
 
   // Health: the overall score and the three layers.
   const overallW = 132;
   const gap = 8;
   const layerW = (l.width - overallW - gap * 3) / 3;
-  const cardH = 128;
-  l.ensure(cardH);
+  const cardH = 122;
   const t = l.y;
   l.card(l.left, t, overallW, cardH);
   l.text('Design system health', l.left + PAD, t + PAD, small, overallW - PAD * 2);
-  l.text(String(report.overall.score), l.left + PAD, t + PAD + 16, { size: 38, font: 'bold' });
-  l.text('/100', l.left + PAD + l.textWidth(String(report.overall.score), { size: 38, font: 'bold' }) + 3, t + PAD + 36, small);
-  l.status(report.overall.level, scoreColour(report.overall.score), l.left + PAD, t + PAD + 64);
-  scoreBar(l, l.left + PAD, t + PAD + 82, overallW - PAD * 2, report.overall.score);
-  l.text('80+ is a mature system', l.left + PAD, t + PAD + 92, tiny, overallW - PAD * 2);
+  l.text(String(report.overall.score), l.left + PAD, t + PAD + 14, { size: 38, font: 'bold' });
+  l.text('/100', l.left + PAD + l.textWidth(String(report.overall.score), { size: 38, font: 'bold' }) + 3, t + PAD + 34, small);
+  l.status(report.overall.level, scoreColour(report.overall.score), l.left + PAD, t + PAD + 62);
+  scoreBar(l, l.left + PAD, t + PAD + 78, overallW - PAD * 2, report.overall.score);
+  l.text('80+ is a mature system', l.left + PAD, t + PAD + 88, tiny, overallW - PAD * 2);
   report.layers.forEach((layer, i) => {
     const x = l.left + overallW + gap + i * (layerW + gap);
     l.card(x, t, layerW, cardH);
@@ -174,55 +169,302 @@ async function summaryPage(l: Layout, ctx: Context): Promise<void> {
   });
   l.y = t + cardH + 10;
 
-  // The cost, once, clearly labelled as an estimate.
+  // The money, prominently, clearly marked as planning estimates.
+  const m = report.money;
+  const tiles = [
+    { value: `${m.savedHours.likely.toLocaleString('en-US')} h`, label: 'of work a design system would have saved so far', note: `${money(m.savedCost)} · likely ${m.savedHours.low}–${m.savedHours.high} h`, tone: COLORS.accentSoft, ink: COLORS.accentText },
+    { value: `${money(m.yearlyCost)}`, label: 'estimated yearly cost of inconsistency', note: `${m.yearlyHours.toLocaleString('en-US')} h of team time a year`, tone: COLORS.dangerSoft, ink: COLORS.danger },
+    { value: `${money(m.recoverable)}`, label: 'potential yearly savings with better design-system adoption', note: `${m.recoverableHours.toLocaleString('en-US')} h a year back`, tone: COLORS.successSoft, ink: COLORS.success },
+  ];
+  const tileW = (l.width - gap * 2) / 3;
+  const tileH = 78;
+  const mt = l.y;
+  tiles.forEach((tile, i) => {
+    const x = l.left + i * (tileW + gap);
+    l.roundedRect(x, mt, tileW, tileH, 10, tile.tone, COLORS.border);
+    l.text(tile.value, x + 12, mt + 11, { size: 21, font: 'bold', color: tile.ink }, tileW - 24);
+    l.text(tile.label, x + 12, mt + 38, { size: 8, font: 'bold', color: COLORS.text, lineHeight: 10 }, tileW - 24);
+    l.text(tile.note, x + 12, mt + 61, { size: 7, color: COLORS.textSecondary }, tileW - 24);
+  });
+  l.y = mt + tileH + 4;
+  l.y += l.text(`Planning estimates, not measured savings: built from what we measured on your pages and a team of ${ctx.audit.assumptions.contributors} at ${money(ctx.audit.assumptions.hourlyRate)} an hour. How we worked them out is on the last page.`, l.left, l.y, { ...tiny, color: COLORS.textTertiary }) + 12;
+
+  // Key findings and the three actions, at a glance.
   card(l, (top) => {
-    let h = l.text(
-      report.money.yearlyCost > 0
-        ? `We estimate inconsistency costs your team about ${money(report.money.yearlyCost)} a year (${report.money.yearlyHours.toLocaleString('en-US')} hours).`
-        : `${report.clientName} is built consistently: there is little design debt to pay down.`,
-      l.left + PAD,
-      top,
-      bold(10),
-      l.width - PAD * 2,
-    );
-    if (report.money.savedHours.likely > 0) {
-      h += 3 + l.text(
-        `A design system would have saved about ${report.money.savedHours.likely} hours of work so far (likely ${report.money.savedHours.low} to ${report.money.savedHours.high}). Planning estimates from what we measured and a team of ${audit.assumptions.contributors}; see the last page.`,
-        l.left + PAD,
-        top + h + 3,
-        small,
-        l.width - PAD * 2,
-      );
-    }
+    const x = l.left + PAD;
+    const w = l.width - PAD * 2;
+    let h = l.text('What we found', x, top, bold(11), w) + 6;
+    for (const k of report.keyFindings) h += l.text(`•  ${k}`, x, top + h, small, w) + 3;
+    h += 8;
+    h += l.text('Fix these three first', x, top + h, bold(11), w) + 6;
+    report.top.forEach((f, i) => {
+      l.roundedRect(x, top + h, 15, 15, 7.5, COLORS.text);
+      l.text(String(i + 1), x + 5, top + h + 3.5, bold(7.5, COLORS.white));
+      const th = l.text(`${f.point.fixTitle}.`, x + 22, top + h + 1, bold(9.5), w - 22);
+      h += th + 1 + l.text(f.point.title, x + 22, top + h + th + 1, small, w - 22) + 7;
+    });
+    return h - 7;
+  });
+}
+
+// ── 2. Website assessment ────────────────────────────────────────────────
+
+function assessmentPage(l: Layout, ctx: Context): void {
+  const { report } = ctx;
+  const s = report.scan;
+  partHeading(l, 2, 'What we looked at', 'We opened your product in a normal browser, the way your customers see it, and measured how it is built. No access to your code, files or team was needed.');
+  const tiles = [
+    { v: String(s.pages), l: s.pages === 1 ? 'page scanned' : 'pages scanned' },
+    { v: s.elements.toLocaleString('en-US'), l: 'visible elements measured' },
+    { v: s.rules.toLocaleString('en-US'), l: 'styling rules read' },
+    { v: String(s.screenshots), l: 'elements photographed as evidence' },
+  ];
+  const gap = 8;
+  const w = (l.width - gap * 3) / 4;
+  tiles.forEach((t, i) => {
+    const x = l.left + i * (w + gap);
+    l.card(x, l.y, w, 52);
+    l.text(t.v, x + 12, l.y + 10, { size: 17, font: 'bold' }, w - 24);
+    l.text(t.l, x + 12, l.y + 32, tiny, w - 24);
+  });
+  l.y += 62;
+  card(l, (top) => {
+    const x = l.left + PAD;
+    let h = l.text('Pages', x, top, bold(9.5)) + 4;
+    for (const p of report.pages) h += l.text(`${p.name} · ${p.url}`, x, top + h, small, l.width - PAD * 2) + 2;
     return h;
   });
 
-  // The three things to fix first, each with the real elements.
-  if (report.top.length) {
-    l.ensure(40);
-    l.y += l.text('Fix these three first', l.left, l.y, bold(TYPE.title)) + 8;
-    report.top.forEach((f, i) => topFinding(l, ctx, f, i + 1));
+  const evaluated = [
+    { name: 'Foundations', what: 'Colours, text styles, spacing and corner shapes: how many there are, whether they follow a system, and whether they come from named design tokens.' },
+    { name: 'Components', what: 'Buttons, icon buttons, tabs, links, inputs, badges, cards and headings: how many styles of each, and which are near-copies of each other.' },
+    { name: 'Accessibility', what: 'Six automated WCAG checks: text contrast, keyboard focus, named buttons, form labels, image descriptions and tap-target size.' },
+  ];
+  l.y += 4 + l.text('What we evaluated', l.left, l.y + 4, bold(TYPE.title)) + 8;
+  card(l, (top) => {
+    const x = l.left + PAD;
+    let h = 0;
+    evaluated.forEach((e, i) => {
+      const layer = report.layers.find((x2) => x2.label === e.name)!;
+      if (i > 0) l.rule(top + h - 6, x, l.width - PAD * 2);
+      l.text(e.name, x, top + h, bold(10), 110);
+      const label = `${layer.score}/100 · ${layer.level}`;
+      l.status(label, scoreColour(layer.score), l.left + l.width - PAD - l.textWidth(label, { size: 8 }) - 9, top + h + 1);
+      h += 14 + l.text(e.what, x, top + h + 14, small, l.width - PAD * 2 - 10);
+      h += 3 + l.text(layer.summary, x, top + h + 3, { ...small, color: COLORS.text }, l.width - PAD * 2 - 10) + 14;
+    });
+    return h - 14;
+  });
+
+  // Working well beside the gaps.
+  l.y += 4 + l.text('In short', l.left, l.y + 4, bold(TYPE.title)) + 8;
+  const colW = (l.width - 10) / 2;
+  const list = (items: string[], x: number, top: number, title: string, dot: RGB) => {
+    let h = l.text(title, x + PAD, top + PAD, bold(10), colW - PAD * 2) + 6;
+    for (const it of items.length ? items : ['Nothing stands out here.']) {
+      l.status('', dot, x + PAD, top + PAD + h + 1);
+      h += l.text(it, x + PAD + 10, top + PAD + h, small, colW - PAD * 2 - 10) + 4;
+    }
+    return h + PAD * 2 - 4;
+  };
+  const height = Math.max(l.measure(() => list(report.working, l.left, 0, 'What’s working well', COLORS.success)), l.measure(() => list(report.gaps, l.left, 0, 'Where the gaps are', COLORS.warning)));
+  l.ensure(height);
+  const lt = l.y;
+  l.card(l.left, lt, colW, height);
+  l.card(l.left + colW + 10, lt, colW, height);
+  list(report.working, l.left, lt, 'What’s working well', COLORS.success);
+  list(report.gaps, l.left + colW + 10, lt, 'Where the gaps are', COLORS.warning);
+  l.y = lt + height + 10;
+}
+
+// ── 3. Priority fixes ────────────────────────────────────────────────────
+
+function priorityPage(l: Layout, ctx: Context): void {
+  const { report } = ctx;
+  if (report.top.length === 0) return;
+  partHeading(l, 3, 'Fix these three first', 'The three changes with the most effect for the effort, each with what is wrong, where it happens, why it matters and what to do.');
+  report.top.forEach((f, i) => priorityFix(l, ctx, f, i + 1));
+}
+
+function priorityFix(l: Layout, ctx: Context, f: HealthFinding, n: number): void {
+  card(l, (top) => {
+    const x = l.left + PAD;
+    const w = l.width - PAD * 2;
+    l.roundedRect(x, top, 20, 20, 10, COLORS.text);
+    l.text(String(n), x + 7, top + 5, bold(9, COLORS.white));
+    l.text(`${LAYER_NAME[f.layer]} · ${f.point.affects}`, x + 28, top, tiny, w - 28);
+    let h = 10 + l.text(f.point.title, x + 28, top + 10, bold(12), w - 28) + 8;
+    // Evidence: the real elements, large enough to recognise.
+    if (f.shots.length) {
+      const cols = Math.min(4, f.shots.length);
+      const sw = (w - 8 * (cols - 1)) / cols;
+      f.shots.slice(0, cols).forEach((s, i) => shotTile(l, ctx, s, x + i * (sw + 8), top + h, sw, 64));
+      h += 72;
+    } else if (f.point.evidence.kind !== 'none' || f.point.id === 'tokens') {
+      visualFor(l, ctx, f, x, top + h, Math.min(w, 300), 70);
+      h += 78;
+    }
+    const block = (label: string, text: string) => {
+      l.text(label, x, top + h, { size: 8, font: 'bold', color: COLORS.textSecondary }, 90);
+      h += Math.max(11, l.text(text, x + 92, top + h, { size: TYPE.small, color: COLORS.text, lineHeight: 11.5 }, w - 92)) + 6;
+    };
+    block('What’s wrong', f.point.story);
+    if (f.details.length) block('Where', f.details.join(' '));
+    block('Why it matters', f.point.why);
+    block('How to fix it', f.point.suggestion);
+    return h - 6;
+  });
+}
+
+// ── 4. Foundations, value by value ───────────────────────────────────────
+
+const TONE = { good: COLORS.success, warn: COLORS.warning, bad: COLORS.danger } as const;
+
+/** One row per value: the value, how often, real examples, what's off and its token status. */
+function valueTable(l: Layout, ctx: Context, rows: ValueRow[], drawValue: (r: ValueRow, x: number, top: number) => void): void {
+  const cols = { value: l.left + 10, uses: l.left + 150, examples: l.left + 186, status: l.left + 378 };
+  const statusW = l.left + l.width - 10 - cols.status;
+  const header = () => {
+    l.ensure(16 + 40);
+    l.text('Value', cols.value, l.y, tiny);
+    l.text('Uses', cols.uses, l.y, tiny);
+    l.text('Where it is used (real elements)', cols.examples, l.y, tiny);
+    l.text('Token', cols.status, l.y, tiny);
+    l.y += 13;
+  };
+  header();
+  for (const r of rows) {
+    const token = tokenLabel(r.token);
+    const statusH = l.measure(() => (r.note ? l.text(r.note, cols.status, 0, { size: 7, font: 'bold' }, statusW) + 2 : 0) + l.text(token.text, cols.status, 0, { size: 7 }, statusW));
+    const rowH = Math.max(34, statusH + 12);
+    if (l.y + rowH > PAGE.height - PAGE.margin - PAGE.footer) {
+      l.addPage();
+      header();
+    }
+    const top = l.y;
+    l.roundedRect(l.left, top, l.width, rowH, 6, COLORS.surface, r.flag === 'ok' ? COLORS.border : r.flag === 'near-copy' ? COLORS.danger : COLORS.warning);
+    drawValue(r, cols.value, top + 6);
+    l.text(`${r.count}×`, cols.uses, top + rowH / 2 - 5, bold(8.5));
+    r.examples.forEach((e, i) => {
+      const ex = cols.examples + i * 64;
+      drawShot(l, ctx.images, e.shot, ex, top + 4, 60, rowH - 8);
+    });
+    if (r.examples.length === 0) l.text('no screenshot', cols.examples, top + rowH / 2 - 5, { size: 7, color: COLORS.textTertiary });
+    let sy = top + 6;
+    if (r.note) sy += l.text(r.note, cols.status, sy, { size: 7, font: 'bold', color: r.flag === 'near-copy' ? COLORS.danger : COLORS.warning }, statusW) + 2;
+    l.text(token.text, cols.status, sy, { size: 7, color: TONE[token.tone] }, statusW);
+    l.y = top + rowH + 3;
+  }
+  l.y += 8;
+}
+
+function foundationsPart(l: Layout, ctx: Context): void {
+  const { report } = ctx;
+  const layer = report.layers.find((x) => x.key === 'foundations')!;
+  const d = report.detail;
+  const f = report.foundations;
+  const share = (label: string) => f.tokens.find((t) => t.label === label)?.share;
+  const tokenNote = (label: string) => {
+    const s = share(label);
+    return s === null || s === undefined ? '' : ` ${s}% of it is written with tokens.`;
+  };
+  partHeading(l, 4, 'Foundations', `The token layer: colours, text styles, spacing and shapes, value by value, with real examples from your pages and whether each maps to a design token. Outlined rows need attention. ${layer.summary}`, layer);
+
+  const legend = 'Token column: “Token” means the value already comes from a design token. “Typed by hand” means a token exists but this place types the raw value. “No token” suggests a semantic token (its job) → a primitive token (the raw step).';
+  l.y += l.text(legend, l.left, l.y, { ...tiny, color: COLORS.textSecondary }) + 10;
+
+  if (d.colours.length) {
+    sub(l, 'Colour', `${f.colours.total} colours in use${f.colours.copies ? `, ${f.colours.copies} of them near-copies nobody could tell apart` : ''}.${tokenNote('Color')}`);
+    valueTable(l, ctx, d.colours, (r, x, top) => {
+      const a = r.alpha ?? 1;
+      const c = parseColor(r.value);
+      // Translucent colours are shown as they look on white, with their opacity named.
+      const shown = c ? rgb(1 - a + (a * c.r) / 255, 1 - a + (a * c.g) / 255, 1 - a + (a * c.b) / 255) : COLORS.sunken;
+      l.roundedRect(x, top, 22, 22, 4, shown, COLORS.border);
+      l.text(r.value.length > 7 ? r.value.slice(0, 7) : r.value, x + 28, top + 2, bold(8), 110);
+      l.text(`${r.role ?? ''}${a < 1 ? ` · ${Math.round(a * 100)}% opacity` : ''}`, x + 28, top + 13, { size: 6.5, color: COLORS.textSecondary }, 110);
+    });
+  }
+  if (d.textStyles.length) {
+    sub(l, 'Typography', `${d.textStyles.length} text styles (font, size/line height, weight) across ${f.type.steps.length} sizes.${tokenNote('Typography')}`);
+    valueTable(l, ctx, d.textStyles, (r, x, top) => {
+      const [family, rest] = [r.value.split(' ').slice(0, -2).join(' '), r.value.split(' ').slice(-2).join(' ')];
+      l.text(family || r.value, x, top + 2, bold(8), 134);
+      l.text(rest, x, top + 13, { size: 7, color: COLORS.textSecondary }, 134);
+    });
+  }
+  if (d.spacing.length) {
+    sub(l, 'Spacing', `Padding, margins and gaps. ${Math.round(f.spacing.fit * 100)}% of uses follow a ${f.spacing.base}px grid.${tokenNote('Spacing')}`);
+    valueTable(l, ctx, d.spacing, (r, x, top) => {
+      l.text(r.value, x, top + 2, bold(8.5), 50);
+      l.roundedRect(x + 46, top + 4, Math.max(2, Math.min(80, parseFloat(r.value) * 1.4)), 7, 1.5, r.flag === 'ok' ? COLORS.text : COLORS.danger);
+    });
+  }
+  if (d.radii.length) {
+    sub(l, 'Shape', `Corner radius. ${f.radii.length} corner styles${f.shadows.distinct ? `, plus ${f.shadows.distinct} shadows (about ${f.shadows.needed} would do)` : ''}.${tokenNote('Shape')}`);
+    valueTable(l, ctx, d.radii, (r, x, top) => {
+      const rad = r.value === 'fully round' ? 10 : Math.min(10, parseFloat(r.value) * 0.75);
+      l.roundedRect(x, top, 30, 20, rad, COLORS.surface, COLORS.text);
+      l.text(r.value, x + 36, top + 5, bold(8), 90);
+    });
   }
 }
 
-function topFinding(l: Layout, ctx: Context, f: HealthFinding, n: number): void {
-  const imgW = 196;
-  const imgH = 74;
-  const textX = l.left + PAD + imgW + 14;
-  const textW = l.width - PAD * 2 - imgW - 14;
-  card(
-    l,
-    (top) => {
-      // Visual: real screenshots, or colour swatches for colour findings.
-      visualFor(l, ctx, f, l.left + PAD, top, imgW, imgH);
-      let h = l.text(`${n} · ${LAYER_NAME[f.layer]} · ${f.point.affects}`, textX, top, tiny, textW);
-      h += 2 + l.text(f.point.title, textX, top + h + 2, bold(10.5), textW);
-      h += 3 + l.text(f.point.summary, textX, top + h + 3, small, textW);
-      h += 4 + l.text(`Fix: ${f.point.fixTitle}.`, textX, top + h + 4, { size: TYPE.small, font: 'bold', color: COLORS.text, lineHeight: 11.5 }, textW);
-      return Math.max(h, imgH);
-    },
-    8,
-  );
+function sub(l: Layout, title: string, note: string): void {
+  l.ensure(90);
+  l.y += l.text(title, l.left, l.y, bold(TYPE.title)) + 3;
+  l.y += l.text(note, l.left, l.y, small) + 8;
+}
+
+// ── 7. Where a design system helps ───────────────────────────────────────
+
+function helpPart(l: Layout, ctx: Context): void {
+  const { report, options } = ctx;
+  const s = report.system;
+  partHeading(l, 7, 'Where a design system helps', 'What is already working, where the gaps are, and what a design system would change for your team.');
+  const block = (title: string, items: string[], dot: RGB) => {
+    if (items.length === 0) return;
+    card(l, (top) => {
+      const x = l.left + PAD;
+      const w = l.width - PAD * 2;
+      let h = l.text(title, x, top, bold(11), w) + 6;
+      for (const it of items) {
+        l.status('', dot, x, top + h + 1);
+        h += l.text(it, x + 10, top + h, { size: TYPE.small, color: COLORS.text, lineHeight: 11.5 }, w - 10) + 4;
+      }
+      return h - 4;
+    });
+  };
+  block('What’s working well', report.working, COLORS.success);
+  block('Where the gaps are', report.gaps, COLORS.warning);
+  block('Opportunities to improve consistency', report.opportunities, COLORS.info);
+  block('How a design system helps your team', report.outcomes, COLORS.accent);
+
+  card(l, (top) => {
+    const x = l.left + PAD;
+    const w = l.width - PAD * 2;
+    let h = l.text('Your starter design system', x, top, bold(11), w) + 4;
+    h += l.text(`We turned the ${s.before} values in use today into ${s.after} named tokens, built from your own colours, sizes and spacing. Reply and we’ll send it as a ready-to-use file (CSS variables and design-token JSON).`, x, top + h, small, w) + 8;
+    const colours = s.tokens.filter((t) => t.category === 'color' && !t.alias).slice(0, 12);
+    colours.forEach((t, i) => {
+      const cx = x + (i % 6) * (w / 6);
+      const cy = top + h + Math.floor(i / 6) * 26;
+      l.roundedRect(cx, cy, 18, 18, 4, colour(t.value), COLORS.border);
+      l.text(t.name.replace('color-', ''), cx + 22, cy + 4, { size: 7, color: COLORS.text }, w / 6 - 24);
+    });
+    return h + Math.ceil(colours.length / 6) * 26 - 8;
+  });
+
+  const { branding } = options;
+  card(l, (top) => {
+    const x = l.left + PAD;
+    const w = l.width - PAD * 2;
+    let h = l.text(branding.agencyName ? `How ${branding.agencyName} can help` : 'How we can help', x, top, bold(10.5), w) + 4;
+    h += l.text('We help product teams turn findings like these into a working design system: a small set of named colours, text styles and spacing, and components that get reused rather than rebuilt. Happy to walk your team through this report, with no obligation.', x, top + h, small, w) + 6;
+    if (hasContact(branding)) h += l.text([branding.preparedBy, branding.email, branding.website].filter(Boolean).join(' · '), x, top + h, bold(9), w) + 6;
+    h += 4 + l.text(methodNote(ctx), x, top + h + 4, { ...tiny, color: COLORS.textTertiary }, w);
+    return h;
+  });
 }
 
 /** The best picture of a finding: its screenshots, its colours, or its values. */
@@ -282,142 +524,37 @@ function shotTile(l: Layout, ctx: Context, s: Shot, x: number, top: number, w: n
   if (s.flag) l.textRight(s.flag, x + w - 2, top + h - capH + 2, { size: 6.5, font: 'bold', color: COLORS.danger });
 }
 
-// ── 2. Foundations ───────────────────────────────────────────────────────
-
-function foundationsPart(l: Layout, ctx: Context): void {
-  const { report } = ctx;
-  const layer = report.layers.find((x) => x.key === 'foundations')!;
-  const f = report.foundations;
-  partHeading(l, 2, 'Foundations', `The token layer: the colours, text styles, spacing and shapes everything else is built from. ${layer.summary}`, layer);
-  const tokenShare = (label: string) => f.tokens.find((t) => t.label === label)?.share;
-  const tokens = (label: string) => {
-    const share = tokenShare(label);
-    return share === null || share === undefined ? '' : ` · ${share}% through tokens`;
-  };
-
-  // Colour: the palette, with near-copies outlined, and where each copy is used.
-  card(l, (top) => {
-    const x = l.left + PAD;
-    const w = l.width - PAD * 2;
-    let h = sectionTitle(l, x, top, 'Colour', `${f.colours.total} colours in use${f.colours.copies ? `, ${f.colours.copies} of them near-copies nobody could tell apart` : ''}${tokens('Color')}.`, w);
-    const tile = 26;
-    const perRow = Math.floor((w + 6) / (tile + 6));
-    const mains = f.colours.palette;
-    mains.forEach((c, i) => {
-      const cx = x + (i % perRow) * (tile + 6);
-      const cy = top + h + Math.floor(i / perRow) * (tile + 14);
-      l.roundedRect(cx, cy, tile, tile, 5, colour(c.main), COLORS.border);
-      if (c.copies.length) {
-        l.roundedRect(cx + tile - 11, cy - 3, 14, 11, 5.5, COLORS.danger);
-        l.text(`+${c.copies.length}`, cx + tile - 8.5, cy - 1.5, { size: 6, font: 'bold', color: COLORS.white }, 20);
-      }
-      l.text(c.main, cx, cy + tile + 2, { size: 5.5, color: COLORS.textSecondary }, tile + 6);
-    });
-    h += Math.ceil(mains.length / perRow) * (tile + 14) + 4;
-    const withCopies = mains.filter((c) => c.copies.length).slice(0, 4);
-    if (withCopies.length) {
-      h += l.text('Near-copies, and where they are used', x, top + h, bold(9), w) + 6;
-      for (const c of withCopies) {
-        l.roundedRect(x, top + h, 20, 20, 4, colour(c.main), COLORS.border);
-        l.text(`${c.main} (keep)`, x + 26, top + h + 5, tiny, 90);
-        let cx = x + 120;
-        for (const copy of c.copies.slice(0, 3)) {
-          l.roundedRect(cx, top + h, 20, 20, 4, colour(copy.hex), COLORS.danger);
-          l.text(copy.hex, cx + 24, top + h + 5, tiny, 50);
-          if (copy.shot) drawShot(l, ctx.images, copy.shot, cx + 70, top + h - 4, 52, 28);
-          cx += 130;
-        }
-        h += 28;
-      }
-    }
-    return h;
-  });
-
-  // Typography: the real text at each size, largest first.
-  const steps = f.type.steps.slice(0, 14);
-  if (steps.length) {
-    card(l, (top) => {
-      const x = l.left + PAD;
-      const w = l.width - PAD * 2;
-      let h = sectionTitle(
-        l,
-        x,
-        top,
-        'Typography',
-        `${f.type.steps.length} text sizes${f.type.families.length ? ` in ${f.type.families.slice(0, 3).join(', ')}` : ''}${f.type.scaleNote ? `; ${f.type.scaleNote}` : ''}${tokens('Typography')}.`,
-        w,
-      );
-      for (const s of steps) {
-        const rowH = Math.min(30, Math.max(17, s.px * 0.75 + 7));
-        l.text(`${s.px}px`, x, top + h + rowH / 2 - 5, bold(8.5), 46);
-        l.text(`${s.count}×`, x + 46, top + h + rowH / 2 - 5, tiny, 30);
-        const shown = drawShot(l, ctx.images, s.shot, x + 80, top + h, Math.min(220, w - 80 - 92), rowH, false);
-        if (!shown) l.text('The quick brown fox', x + 84, top + h + Math.max(0, rowH / 2 - (s.px * 0.75) / 2 - 1), { size: Math.min(24, s.px * 0.75) }, w - 180);
-        const flag = s.nearCopyOf ? `≈ ${s.nearCopyOf}px, near-copy` : s.offScale ? 'off the scale' : '';
-        if (flag) l.textRight(flag, x + w, top + h + rowH / 2 - 5, { size: 7.5, font: 'bold', color: s.nearCopyOf ? COLORS.danger : COLORS.warning });
-        h += rowH + 2;
-        l.rule(top + h - 1, x, w);
-      }
-      return h;
-    });
-  }
-
-  // Spacing (left) beside shape & depth and token use (right), in one card.
-  const values = f.spacing.values.filter((v) => v.px <= 64);
-  const rows = f.tokens.filter((t) => t.share !== null);
-  card(l, (top) => {
-    const x = l.left + PAD;
-    const colW = (l.width - PAD * 2 - 24) / 2;
-    let left = 0;
-    if (values.length) {
-      const off = values.filter((v) => !v.onGrid).length;
-      left = sectionTitle(l, x, top, 'Spacing', `${Math.round(f.spacing.fit * 100)}% of uses follow a ${f.spacing.base}px grid${off ? `; ${off} values don't (in red)` : ''}${tokens('Spacing')}.`, colW);
-      values.slice(0, 18).forEach((v, i) => {
-        const cy = top + left + i * 11.5;
-        l.text(`${v.px}px`, x, cy, { size: 7.5, font: v.onGrid ? 'regular' : 'bold', color: v.onGrid ? COLORS.text : COLORS.danger }, 34);
-        l.roundedRect(x + 36, cy + 2, Math.max(2, v.px * 2), 6, 1.5, v.onGrid ? COLORS.text : COLORS.danger);
-        l.textRight(`${v.count}×`, x + colW, cy, tiny);
-      });
-      left += Math.min(values.length, 18) * 11.5;
-    }
-    const rx = x + colW + 24;
-    let right = 0;
-    if (f.radii.length) {
-      right = sectionTitle(l, rx, top, 'Shape & depth', `${f.radii.length} corner styles${f.shadows.distinct ? `, ${f.shadows.distinct} shadows (about ${f.shadows.needed} would do)` : ''}.`, colW);
-      f.radii.slice(0, 6).forEach((r, i) => {
-        const cx = rx + i * 38;
-        const rad = r.value === 'full' ? 10 : Math.min(10, parseFloat(r.value) * 0.75);
-        l.roundedRect(cx, top + right, 30, 20, rad, COLORS.surface, COLORS.text);
-        l.text(`${r.value} · ${r.count}×`, cx, top + right + 23, { size: 5.5, color: COLORS.textSecondary }, 38);
-      });
-      right += 38;
-    }
-    if (rows.length) {
-      right += sectionTitle(l, rx, top + right, 'Managed with tokens', 'Named tokens change everywhere in one edit.', colW);
-      right += barChart(
-        l,
-        rx,
-        top + right,
-        colW,
-        rows.map((t) => ({ label: t.label, value: t.share!, valueLabel: `${t.share}%`, dot: scoreColour(t.share!) })),
-        { max: 100, labelWidth: 74 },
-      );
-    }
-    return Math.max(left, right);
-  });
-}
-
 // ── 3. Components ────────────────────────────────────────────────────────
 
 function componentsPart(l: Layout, ctx: Context): void {
   const { report } = ctx;
   const layer = report.layers.find((x) => x.key === 'components')!;
-  partHeading(l, 3, 'Components', `The building blocks. Every style we found, photographed from your pages and numbered; near-copies and one-offs are marked. ${layer.summary}`, layer);
+  partHeading(l, 5, 'Components', `The building blocks. Every style we found, photographed from your pages and numbered; near-copies and one-offs are marked. ${layer.summary}`, layer);
   if (report.components.length === 0) {
     l.y += l.text('No element came in more than one style.', l.left, l.y, small) + 10;
     return;
   }
-  for (const group of report.components) componentGroup(l, ctx, group);
+  for (const group of report.components.filter((g) => g.hasProblem || g.styles > 1)) componentGroup(l, ctx, group);
+  // Kinds with a single style are good news: one compact card, one tile per kind.
+  const single = report.components.filter((g) => !g.hasProblem && g.styles === 1);
+  if (single.length) {
+    card(l, (top) => {
+      const x = l.left + PAD;
+      const w = l.width - PAD * 2;
+      let h = l.text('Consistent: one style each, used everywhere', x, top, bold(11), w) + 8;
+      const cols = 4;
+      const tw = (w - 8 * (cols - 1)) / cols;
+      single.forEach((g, i) => {
+        const tx = x + (i % cols) * (tw + 8);
+        const ty = top + h + Math.floor(i / cols) * 66;
+        const item = g.items[0]!;
+        l.roundedRect(tx, ty, tw, 48, 6, COLORS.surface, COLORS.border);
+        if (!drawShot(l, ctx.images, item.shot, tx, ty, tw, 48, false)) replica(l, g, item, tx + tw / 2, ty + 24, tw - 12);
+        l.text(`${g.label} · used ${item.count}×`, tx + 2, ty + 51, { size: 6.5, color: COLORS.textSecondary }, tw);
+      });
+      return h + Math.ceil(single.length / cols) * 66 - 8;
+    });
+  }
 }
 
 function componentGroup(l: Layout, ctx: Context, group: GalleryGroup): void {
@@ -426,10 +563,12 @@ function componentGroup(l: Layout, ctx: Context, group: GalleryGroup): void {
   const gap = 8;
   const tileW = (l.width - PAD * 2 - gap * (cols - 1)) / cols;
   const stageH = group.kind === 'card' ? 92 : 52;
-  const tileH = stageH + 14;
+  // Room under each tile for what differs from the style it copies, and the page it is on.
+  const extra = items.some((i) => i.diff.length || i.page) ? 18 : 0;
+  const tileH = stageH + 14 + extra;
   card(l, (top) => {
     const x = l.left + PAD;
-    const title = `${group.label} · ${group.styles} styles, about ${group.needed} needed`;
+    const title = `${group.label} · ${group.styles} ${group.styles === 1 ? 'style' : 'styles'}, about ${group.needed} needed`;
     l.text(title, x, top, bold(11), l.width - PAD * 2 - 90);
     l.status(group.hasProblem ? 'Needs attention' : 'Consistent', group.hasProblem ? COLORS.warning : COLORS.success, l.left + l.width - PAD - 80, top + 1);
     let h = 16 + l.text(group.headline, x, top + 16, small, l.width - PAD * 2) + 8;
@@ -442,6 +581,8 @@ function componentGroup(l: Layout, ctx: Context, group: GalleryGroup): void {
       l.text(`#${item.n} · used ${item.count}×`, tx + 2, ty + stageH + 3, { size: 6.5, color: COLORS.textSecondary }, tileW);
       if (flagged) l.textRight(`copy of #${item.copyOf}`, tx + tileW - 2, ty + stageH + 3, { size: 6.5, font: 'bold', color: COLORS.danger });
       else if (item.rare) l.textRight('used once', tx + tileW - 2, ty + stageH + 3, { size: 6.5, font: 'bold', color: COLORS.warning });
+      const below = [item.diff.join('; '), item.page ?? ''].filter(Boolean).join(' · ');
+      if (below) l.text(below, tx + 2, ty + stageH + 12, { size: 6, color: flagged ? COLORS.danger : COLORS.textTertiary, lineHeight: 7.5 }, tileW - 4);
     });
     return h + Math.ceil(items.length / cols) * (tileH + gap) - gap;
   });
@@ -475,7 +616,7 @@ function accessibilityPart(l: Layout, ctx: Context): void {
   const { report } = ctx;
   const layer = report.layers.find((x) => x.key === 'accessibility')!;
   const a = report.accessibility;
-  partHeading(l, 4, 'Accessibility', `${a.report.headline} Each check maps to a WCAG success criterion; the failing elements are shown below.`, layer);
+  partHeading(l, 6, 'Accessibility', `${a.report.headline} Each check maps to a WCAG success criterion; the failing elements are shown below.`, layer);
   const rows = a.report.checks.filter((c) => c.status !== 'not-applicable');
   card(l, (top) => {
     const x = l.left + PAD;
@@ -510,75 +651,6 @@ function accessibilityPart(l: Layout, ctx: Context): void {
     `Needs a manual review: ${a.report.manual.join('; ')}.`,
   ].filter(Boolean);
   card(l, (top) => notes.reduce((h, n) => h + l.text(n, l.left + PAD, top + h, small, l.width - PAD * 2) + 5, 0) - 5);
-}
-
-// ── 5. Next steps ────────────────────────────────────────────────────────
-
-function nextStepsPart(l: Layout, ctx: Context): void {
-  const { report, options } = ctx;
-  const s = report.system;
-  partHeading(
-    l,
-    5,
-    'Your design system, extracted',
-    `We turned the ${s.before} values your product uses today into ${s.after} named tokens, built from your own colours, sizes and spacing. Reply and we'll send it as a ready-to-use file (CSS variables and design-token JSON).`,
-  );
-  const colours = s.tokens.filter((t) => t.category === 'color' && !t.alias);
-  if (colours.length) {
-    card(l, (top) => {
-      const x = l.left + PAD;
-      const cols = 4;
-      const w = (l.width - PAD * 2 - 8 * (cols - 1)) / cols;
-      const h = l.text('Colour tokens', x, top, bold(10)) + 8;
-      colours.forEach((t, i) => {
-        const cx = x + (i % cols) * (w + 8);
-        const cy = top + h + Math.floor(i / cols) * 32;
-        l.roundedRect(cx, cy, 24, 24, 4, colour(t.value), COLORS.border);
-        l.text(t.name.replace('color-', ''), cx + 30, cy + 2, bold(8), w - 32);
-        l.text(`${t.value}${t.replaces.length ? ` · replaces ${t.replaces.length}` : ''}`, cx + 30, cy + 13, tiny, w - 32);
-      });
-      return h + Math.ceil(colours.length / cols) * 32 - 8;
-    });
-  }
-  const scales = s.groups.filter((g) => ['font-size', 'spacing', 'radius', 'font-weight'].includes(g.category));
-  if (scales.length) {
-    card(l, (top) => {
-      const x = l.left + PAD;
-      let h = 0;
-      for (const g of scales) {
-        h += l.text(g.label, x, top + h, bold(9)) + 3;
-        h += l.text(g.tokens.map((t) => `${t.name.split('-').slice(g.category === 'font-size' || g.category === 'font-weight' ? 2 : 1).join('-')} ${t.value}`).join('   ·   '), x, top + h, small, l.width - PAD * 2) + 9;
-      }
-      return h - 9;
-    });
-  }
-
-  // Next steps: the fixes in order, quick wins first.
-  const steps = [...new Set([...report.quickWins.map((q) => q.opportunity.title), ...report.top.map((f) => f.point.fixTitle)])].slice(0, 5);
-  if (steps.length) {
-    l.ensure(60);
-    l.y += 6 + l.text('What we would do first', l.left, l.y + 6, bold(TYPE.title)) + 8;
-    card(l, (top) =>
-      steps.reduce((h, step, i) => {
-        l.roundedRect(l.left + PAD, top + h, 16, 16, 8, COLORS.sunken, COLORS.border);
-        l.text(String(i + 1), l.left + PAD + 5, top + h + 3.5, bold(7.5));
-        return h + Math.max(16, l.text(step, l.left + PAD + 24, top + h + 2, { size: TYPE.body, lineHeight: 12.5 }, l.width - PAD * 2 - 24)) + 8;
-      }, 0) - 8,
-    );
-  }
-
-  // How we can help, and how we worked it out.
-  const { branding } = options;
-  const method = methodNote(ctx);
-  card(l, (top) => {
-    const x = l.left + PAD;
-    const w = l.width - PAD * 2;
-    let h = l.text(branding.agencyName ? `How ${branding.agencyName} can help` : 'How we can help', x, top, bold(10.5), w) + 4;
-    h += l.text('We help product teams turn findings like these into a working design system: a small set of named colours, text styles and spacing, and components that get reused rather than rebuilt. Happy to walk your team through this report, with no obligation.', x, top + h, small, w) + 6;
-    if (hasContact(branding)) h += l.text([branding.preparedBy, branding.email, branding.website].filter(Boolean).join(' · '), x, top + h, bold(9), w) + 6;
-    h += 4 + l.text(method, x, top + h + 4, { ...tiny, color: COLORS.textTertiary }, w);
-    return h;
-  });
 }
 
 function methodNote({ report, audit, money }: Context): string {
@@ -618,10 +690,12 @@ export async function auditToPdf(audit: Audit, options: ClientReportOptions): Pr
 
   const l = new Layout(pdf, fonts);
   await summaryPage(l, ctx);
+  assessmentPage(l, ctx);
+  priorityPage(l, ctx);
   foundationsPart(l, ctx);
   componentsPart(l, ctx);
   accessibilityPart(l, ctx);
-  nextStepsPart(l, ctx);
+  helpPart(l, ctx);
   footers(l, ctx);
   return pdf.save();
 }

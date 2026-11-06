@@ -10,6 +10,9 @@
 import type { Audit } from '../audit';
 import type { ComponentKind } from '../inference/types';
 import type { EvidenceShot, StyleKey } from '../shared/snapshot';
+import { parseColor, toHex } from '../shared/color';
+import { parseSelector } from '../shared/page-scope';
+import { pageName } from './describe';
 
 export interface GalleryItem {
   /** 1-based number, as shown under the replica. */
@@ -25,6 +28,44 @@ export interface GalleryItem {
   selectors: string[];
   /** The real thing, photographed on the page, when screenshots were taken. */
   shot: EvidenceShot | null;
+  /** For a near-copy: exactly what differs from the style it copies, e.g. "padding 8px → 10px". */
+  diff: string[];
+  /** Where it was seen: the page, in a multi-page audit. */
+  page: string | null;
+}
+
+const PROP_NAMES: Partial<Record<StyleKey, string>> = {
+  backgroundColor: 'fill',
+  color: 'text colour',
+  borderTopColor: 'border colour',
+  borderTopWidth: 'border',
+  borderTopLeftRadius: 'corners',
+  fontSize: 'text size',
+  fontWeight: 'weight',
+  fontFamily: 'font',
+  lineHeight: 'line height',
+  paddingTop: 'padding (top)',
+  paddingLeft: 'padding (side)',
+  boxShadow: 'shadow',
+};
+
+function friendly(value: string): string {
+  const c = parseColor(value);
+  if (c && /^(rgb|#)/.test(value)) return toHex(c);
+  return value.length > 24 ? `${value.slice(0, 24)}…` : value;
+}
+
+/** What differs between two styles of the same element, in words. */
+export function styleDiff(a: Partial<Record<StyleKey, string>>, b: Partial<Record<StyleKey, string>>, ha?: number, hb?: number): string[] {
+  const out: string[] = [];
+  for (const key of Object.keys(PROP_NAMES) as StyleKey[]) {
+    const x = a[key];
+    const y = b[key];
+    if (x === y) continue;
+    out.push(`${PROP_NAMES[key]} ${x ? friendly(x) : 'none'} → ${y ? friendly(y) : 'none'}`);
+  }
+  if (out.length === 0 && ha && hb && ha !== hb) out.push(`height ${ha}px → ${hb}px`);
+  return out.slice(0, 3);
 }
 
 export interface GalleryGroup {
@@ -41,14 +82,15 @@ export interface GalleryGroup {
 }
 
 /** Kinds that read well as replicas: they have a label and a recognisable look. */
-const SHOWN: ComponentKind[] = ['button', 'input', 'badge', 'link', 'heading', 'card'];
-const NOUNS: Partial<Record<ComponentKind, string>> = { button: 'button', input: 'input', badge: 'badge', link: 'link', heading: 'heading', card: 'card' };
+const SHOWN: ComponentKind[] = ['button', 'icon-button', 'input', 'link', 'tab', 'badge', 'card', 'heading'];
+const NOUNS: Partial<Record<ComponentKind, string>> = { button: 'button', 'icon-button': 'icon button', tab: 'tab', input: 'input', badge: 'badge', link: 'link', heading: 'heading', card: 'card' };
 const MAX_ITEMS = 12;
 
 export function componentGallery(audit: Audit): GalleryGroup[] {
   const groups: GalleryGroup[] = [];
   for (const component of audit.analysis.components) {
-    if (!SHOWN.includes(component.kind) || component.variants.length < 2) continue;
+    // Every kind found is shown: consistent ones are part of the story too.
+    if (!SHOWN.includes(component.kind) || component.variants.length === 0) continue;
     // Cards only read well as photographs: a redrawn empty box says nothing.
     if (component.kind === 'card' && !component.variants.some((v) => audit.snapshot.evidence?.[v.selectors[0] ?? ''])) continue;
     const noun = NOUNS[component.kind]!;
@@ -66,6 +108,8 @@ export function componentGallery(audit: Audit): GalleryGroup[] {
       rare: v.count === 1 && i >= needed,
       selectors: v.selectors,
       shot: audit.snapshot.evidence?.[v.selectors[0] ?? ''] ?? null,
+      diff: twin.has(i) ? styleDiff(component.variants[twin.get(i)!]!.preview ?? {}, v.preview ?? {}, component.variants[twin.get(i)!]!.size?.h, v.size?.h) : [],
+      page: pageOfSelector(audit, v.selectors[0]),
     }));
     const copies = items.filter((x) => x.copyOf !== null).length;
     const styles = component.variants.length;
@@ -75,10 +119,19 @@ export function componentGallery(audit: Audit): GalleryGroup[] {
       ? `${styles} different ${plural}, where about ${needed} would do.`
       : copies
         ? `${styles} ${noun} styles, ${copies} of them ${copies === 1 ? 'a near-copy' : 'near-copies'} of another.`
-        : `${styles} ${noun} styles, each clearly different.`;
+        : styles === 1
+          ? `One ${noun} style, used everywhere: consistent.`
+          : `${styles} ${noun} styles, each clearly different.`;
     groups.push({ kind: component.kind, label: component.label, noun, styles, needed, items, headline, hasProblem: over || copies > 0 });
   }
   return groups.sort((a, b) => Number(b.hasProblem) - Number(a.hasProblem) || b.styles - b.needed - (a.styles - a.needed));
+}
+
+function pageOfSelector(audit: Audit, selector: string | undefined): string | null {
+  const pages = audit.snapshot.pages;
+  if (!pages || !selector) return null;
+  const { page } = parseSelector(selector);
+  return page === null || !pages[page] ? null : pageName(pages[page]!);
 }
 
 const cap = (value: string | undefined, max: number): string | undefined => {

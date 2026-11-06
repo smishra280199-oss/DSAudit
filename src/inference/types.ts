@@ -76,7 +76,7 @@ export interface FoundationAnalysis {
   applicable: boolean;
 }
 
-export type ComponentKind = 'button' | 'input' | 'link' | 'heading' | 'card' | 'badge' | 'avatar';
+export type ComponentKind = 'button' | 'icon-button' | 'tab' | 'input' | 'link' | 'heading' | 'card' | 'badge' | 'avatar';
 
 export interface ComponentVariant {
   signature: string;
