@@ -71,6 +71,9 @@ export function mergeSnapshots(snapshots: PageSnapshot[], id: string, title: str
     hostAccess: snapshots.every((s) => s.hostAccess),
     screenshot: first.screenshot,
     pages,
+    evidence: Object.fromEntries(
+      snapshots.flatMap((s, page) => Object.entries(s.evidence ?? {}).map(([selector, shot]) => [scopeSelector(page, selector), shot])),
+    ),
     rendered: {
       elements,
       truncated: snapshots.some((s) => s.rendered.truncated),

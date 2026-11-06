@@ -1,75 +1,20 @@
 /**
- * The client report as a single HTML file: the web twin of the PDF (summary
- * dashboard, then problems, fixes and what's working well), built
- * from the same executive summary and in the same visual language (grey
- * canvas, white hairline cards, sentence-case table headers, grey chips,
- * status dots). Adapts to dark mode on screen and prints on A4.
+ * The client report as one HTML file: the web twin of the PDF, in the same
+ * five parts (summary, foundations, components, accessibility, next steps),
+ * with real screenshots of the elements embedded. Adapts to dark mode on
+ * screen and prints on A4.
  */
 
 import type { Audit } from '../audit';
-import { STATUS_LABELS, summarise, type Evidence, type PainPoint } from '../insights';
-import type { Severity } from '../inference/types';
-import { formatMoney, formatMoneyShort } from '../savings';
-import type { ClientReportOptions } from './branding';
+import { replicaCss, type GalleryGroup } from '../insights/gallery';
+import { healthReport, type HealthFinding, type Shot } from '../insights/health';
+import { formatMoney } from '../savings';
+import type { EvidenceShot } from '../shared/snapshot';
+import { hasContact, type ClientReportOptions } from './branding';
 import { formatDate } from './format';
-import { componentGallery, replicaCss } from '../insights/gallery';
-import { starterSystem } from '../insights/starter-system';
-import { accessibilityReport } from '../insights/wcag';
-
-const cssText = (css: Record<string, string>) => Object.entries(css).map(([k, v]) => `${k}:${escape(v)}`).join(';');
-
-function galleryHtml(audit: Audit): string {
-  const groups = componentGallery(audit).filter((g) => g.hasProblem);
-  if (groups.length === 0) return '';
-  return `<h2>Your components, side by side</h2><p class="muted">Every style we found, redrawn from your pages. “Copy of” marks a near-identical style.</p>
-${groups
-  .map(
-    (g) => `<section class="card"><h3>${escape(g.label)}: ${escape(g.headline)}</h3><div class="gal">${g.items
-      .map(
-        (it) => `<div class="tile"><div class="stage"><span style="${cssText(replicaCss(g.kind, it.styles))};max-width:100%;overflow:hidden;text-overflow:ellipsis">${escape(it.label)}</span></div>
-<div class="small muted tmeta">#${it.n} · ${it.count}×${it.copyOf !== null ? ` <span class="dot at-risk">copy of #${it.copyOf}</span>` : it.rare ? ' <span class="dot needs-work">used once</span>' : ''}</div></div>`,
-      )
-      .join('')}</div></section>`,
-  )
-  .join('')}`;
-}
-
-function accessibilityHtml(audit: Audit): string {
-  const r = accessibilityReport(audit);
-  const rows = r.checks.filter((c) => c.status !== 'not-applicable');
-  if (rows.length === 0) return '';
-  return `<h2>Accessibility check</h2><p class="muted">${escape(r.headline)}</p>
-<section class="card tablecard"><table><tr><th>Check</th><th>WCAG</th><th>Who it affects</th><th>Result</th></tr>${rows
-    .map(
-      (c) => `<tr><td><b>${escape(c.name)}</b></td><td class="muted">${c.sc} (${c.level}${c.version === '2.2' ? ', 2.2' : ''})</td><td class="small muted">${escape(c.impact)}</td>
-<td>${c.status === 'fail' ? `<span class="dot at-risk">Fails: ${c.failed} of ${c.checked}</span>` : `<span class="dot strong">Passes</span>`}</td></tr>`,
-    )
-    .join('')}</table></section>
-<p class="small muted">${escape(r.regulation)} Needs a manual review: ${escape(r.manual.join('; '))}.</p>`;
-}
-
-function systemHtml(audit: Audit, clientName: string): string {
-  const s = starterSystem(audit, clientName);
-  if (s.tokens.length === 0) return '';
-  const colours = s.tokens.filter((t) => t.category === 'color' && !t.alias);
-  return `<h2>Your design system, extracted</h2><p class="muted">We turned the ${s.before} values your product uses today into ${s.after} named tokens, built from your own colours, sizes and spacing. Reply and we’ll send it as a ready-to-use file (CSS variables and design-token JSON). Review the names and merges before adopting it.</p>
-<section class="card"><h3>Colour</h3><div class="gal">${colours
-    .map((t) => `<div class="sw" style="margin:6px 0"><i style="background:${escape(t.value)};width:28px;height:28px"></i><span><b>${escape(t.name.replace('color-', ''))}</b><br>${escape(t.value)}${t.replaces.length ? ` · +${t.replaces.length} merged` : ''}</span></div>`)
-    .join('')}</div></section>
-<section class="card tablecard"><table><tr><th>Token</th><th>Value</th><th>Replaces</th></tr>${s.tokens
-    .filter((t) => t.category !== 'color')
-    .map((t) => `<tr><td><code>--${escape(t.name)}</code></td><td class="muted">${escape(t.value)}</td><td class="small muted">${escape(t.replaces.join(', ')) || '—'}</td></tr>`)
-    .join('')}</table></section>`;
-}
 
 export const escape = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-
-const PRIORITY: Record<Severity, { label: string; dot: string }> = {
-  high: { label: 'High priority', dot: 'at-risk' },
-  medium: { label: 'Worth fixing', dot: 'needs-work' },
-  low: { label: 'Nice to have', dot: 'muted' },
-};
 
 export const STYLES = `
 :root{--canvas:#f6f6f6;--surface:#fff;--sunken:#f1f1f1;--border:#ebebeb;--text:#171717;--text-2:#6b6b6b;--text-3:#a3a3a3;
@@ -108,176 +53,197 @@ footer{color:var(--text-3);font-size:11px;text-align:center;margin-top:16px}
 .stage{display:grid;place-items:center;height:70px;padding:8px;background:#fff;border-bottom:1px solid var(--border)}.tmeta{padding:4px 8px}code{font-size:11.5px}
 @media (max-width:640px){.grid2,.grid3,.stats{grid-template-columns:1fr}}
 @media (max-width:640px){.grid4{grid-template-columns:repeat(2,1fr)}.cover{grid-template-columns:1fr}.shot{width:100%}}
+
+.layers{display:grid;grid-template-columns:1.1fr 1fr 1fr 1fr;gap:8px}.score{font-size:40px;font-weight:700;letter-spacing:-.02em;line-height:1.1}.score small{font-size:13px;color:var(--text-2);font-weight:400}
+.lscore{font-size:22px;font-weight:700}.bar{height:5px;border-radius:3px;background:var(--sunken);margin:8px 0;overflow:hidden}.bar i{display:block;height:100%;border-radius:3px}
+.top3{display:grid;grid-template-columns:220px 1fr;gap:14px;align-items:start}.shots{display:flex;gap:6px}.shotbox{flex:1;min-width:0}
+.ev{display:grid;place-items:center;background:#fff;border-radius:6px;box-shadow:inset 0 0 0 1px var(--border);padding:5px;min-height:56px;overflow:hidden}.ev img{max-width:100%;max-height:120px;display:block}
+.ev.bad{box-shadow:inset 0 0 0 1.5px var(--danger)}.cap{display:flex;justify-content:space-between;gap:6px;font-size:11px;color:var(--text-2);margin-top:3px}.cap b{color:var(--danger)}
+.pal{display:flex;flex-wrap:wrap;gap:8px}.sw2{width:44px;font-size:9.5px;color:var(--text-2);text-align:center;position:relative}.sw2 i{display:block;height:36px;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1);margin-bottom:3px}
+.sw2 em{position:absolute;top:-6px;right:-6px;background:var(--danger);color:#fff;font-style:normal;font-size:9px;font-weight:700;border-radius:8px;padding:0 4px}
+.ramp td{vertical-align:middle}.ramp .ev{min-height:0;box-shadow:none;background:none;justify-items:start}.flag{color:var(--danger);font-weight:600;font-size:11.5px}.warn{color:var(--warning);font-weight:600;font-size:11.5px}
+.ruler{display:grid;grid-template-columns:44px 1fr 40px;gap:4px 8px;align-items:center;font-size:11.5px}.ruler i{display:block;height:7px;border-radius:2px;background:var(--text)}.ruler .off{color:var(--danger);font-weight:600}.ruler .off+span i{background:var(--danger)}
+.grid4c{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}.grid3c{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+@media (max-width:640px){.layers,.grid4c,.grid3c{grid-template-columns:repeat(2,1fr)}.top3{grid-template-columns:1fr}}
 @media print{@page{size:A4;margin:14mm}body{font-size:11px}main{padding:0;max-width:none}.card{break-inside:avoid}.break{break-before:page}}
 `;
 
-function evidenceHtml(e: Evidence): string {
-  switch (e.kind) {
-    case 'colours':
-      return e.groups
-        .map((g) => `<div class="swrow">${[g.main, ...g.copies].map((c) => `<span class="sw"><i style="background:${escape(c)}"></i>${escape(c)}</span>`).join('')}</div>`)
-        .join('');
-    case 'values':
-      return `<div class="chips">${e.items.map((i) => `<span class="chip${i.flagged ? ' flag' : ''}">${escape(i.value)} ×${i.count}</span>`).join('')}</div><p class="small muted" style="margin-top:6px">${escape(e.note)}</p>`;
-    case 'contrast':
-      return `<table style="margin-top:8px">${e.items
-        .map(
-          (i) => `<tr><td style="width:40px"><span class="aa" style="color:${escape(i.foreground)};background:${escape(i.background)}">Aa</span></td>
-<td>“${escape(i.text)}”<div class="small faint">${escape(i.foreground)} on ${escape(i.background)}</div></td><td class="num small muted">${i.ratio} : 1 (needs 4.5)</td></tr>`,
-        )
-        .join('')}</table>`;
-    case 'variants':
-      return `<table style="margin-top:8px">${e.items.map((i) => `<tr><td><b>${escape(i.label)}</b></td><td class="small muted">${escape(i.details)}</td></tr>`).join('')}</table>`;
-    case 'none':
-      return '';
+const PART = (n: number, title: string, intro: string, layer?: { score: number; level: string }) =>
+  `<p class="part break">${n} of 5${layer ? ` · <span class="dot ${dot(layer.score)}">${layer.score}/100 · ${escape(layer.level)}</span>` : ''}</p><h2>${escape(title)}</h2><p class="muted">${escape(intro)}</p>`;
+
+function dot(score: number): string {
+  return score >= 80 ? 'strong' : score >= 35 ? 'needs-work' : 'at-risk';
+}
+
+function barColour(score: number): string {
+  return score >= 80 ? 'var(--success)' : score >= 60 ? '#3b82f6' : score >= 35 ? 'var(--warning)' : 'var(--danger)';
+}
+
+function img(shot: EvidenceShot | null, alt: string, bad = false): string {
+  return `<div class="ev${bad ? ' bad' : ''}">${shot ? `<img src="${shot.src}" alt="${escape(alt)}" style="width:${Math.min(shot.w, 520)}px">` : ''}</div>`;
+}
+
+function shotHtml(s: Shot, alt: string): string {
+  return `<div class="shotbox">${img(s.shot, alt, Boolean(s.flag))}<div class="cap"><span>${escape(s.caption)}</span>${s.flag ? `<b>${escape(s.flag)}</b>` : ''}</div></div>`;
+}
+
+const cssText = (css: Record<string, string>) => Object.entries(css).map(([k, v]) => `${k}:${escape(v)}`).join(';');
+
+function findingVisual(audit: Audit, f: HealthFinding): string {
+  if (f.shots.length) return `<div class="shots">${f.shots.slice(0, 2).map((s) => shotHtml(s, f.point.affects)).join('')}</div>`;
+  const e = f.point.evidence;
+  if (f.point.id === 'tokens') {
+    const share = Math.round((audit.analysis.tokens.coverage ?? 0) * 100);
+    return `<div class="card" style="box-shadow:inset 0 0 0 1px var(--border)"><div class="score">${share}%</div><p class="small muted">of styling uses named tokens · ${audit.savings.retheme.literals.toLocaleString('en-US')} values typed by hand</p><div class="bar"><i style="width:${share}%;background:var(--success)"></i></div></div>`;
   }
+  if (e.kind === 'colours') return e.groups.slice(0, 2).map((g) => `<div class="pal" style="margin-bottom:6px">${[g.main, ...g.copies].map((c, i) => `<div class="sw2"><i style="background:${escape(c)};${i ? 'box-shadow:inset 0 0 0 2px var(--danger)' : ''}"></i>${escape(c)}</div>`).join('')}</div>`).join('');
+  if (e.kind === 'values') return `<div class="chips">${e.items.slice(0, 14).map((i) => `<span class="chip${i.flagged ? ' flag' : ''}">${escape(i.value)} ×${i.count}</span>`).join('')}</div>`;
+  return '';
 }
 
-function problemHtml(p: PainPoint, index: number, money: (n: number) => string): string {
-  const priority = PRIORITY[p.severity];
-  const seen = p.where.length ? p.where.map((w) => w.charAt(0).toUpperCase() + w.slice(1)) : p.pages;
-  return `<section class="card"><header style="display:flex;justify-content:space-between;gap:12px"><h3>${index}. ${escape(p.title)}</h3><span class="dot ${priority.dot}">${priority.label}</span></header>
-<p class="muted">${escape(p.summary)}</p>
-<div class="stats"><div><b>${p.count.toLocaleString('en-US')}</b><span>${escape(p.countLabel)}</span></div>
-<div><b>${p.pages.length || '—'}</b><span>${p.pages.length === 1 ? 'page affected' : p.pages.length ? 'pages affected' : 'single page'}</span></div>
-<div><b>${p.annualCost ? money(p.annualCost) : '—'}</b><span>${p.annualCost ? 'estimated cost a year' : 'risk rather than cost'}</span></div></div>
-${evidenceHtml(p.evidence)}
-${seen.length ? `<p class="label">Seen in</p><div class="chips">${seen.slice(0, 6).map((w) => `<span class="chip">${escape(w)}</span>`).join('')}</div>` : ''}
-<details style="margin-top:10px"><summary class="small muted">More detail</summary><p class="small muted" style="margin-top:6px">${escape(p.story)}</p></details>
-<p class="small muted" style="margin-top:8px">Why it matters: ${escape(p.why)}</p></section>`;
-}
-
-function bars(rows: { label: string; value: number; valueLabel: string; dot?: string }[], max: number): string {
-  return `<div class="bars">${rows
-    .map(
-      (r) => `<span>${r.dot ? `<span class="dot ${r.dot}"></span> ` : ''}${escape(r.label)}</span><span class="track"><i style="width:${Math.max(3, (Math.min(r.value, max) / max) * 100)}%"></i></span><span class="val">${escape(r.valueLabel)}</span>`,
-    )
-    .join('')}</div>`;
+function componentsHtml(groups: GalleryGroup[]): string {
+  if (groups.length === 0) return '<p class="muted">No element came in more than one style.</p>';
+  return groups
+    .map((g) => {
+      const items = g.hasProblem ? g.items : g.items.slice(0, 4);
+      const cls = g.kind === 'card' || g.kind === 'heading' ? 'grid3c' : 'grid4c';
+      return `<section class="card"><header style="display:flex;justify-content:space-between;gap:12px"><h3>${escape(g.label)} · ${g.styles} styles, about ${g.needed} needed</h3><span class="dot ${g.hasProblem ? 'needs-work' : 'strong'}">${g.hasProblem ? 'Needs attention' : 'Consistent'}</span></header>
+<p class="small muted">${escape(g.headline)}</p><div class="${cls}">${items
+        .map((it) => {
+          const visual = it.shot
+            ? img(it.shot, `${g.label} style ${it.n}`, it.copyOf !== null)
+            : `<div class="ev${it.copyOf !== null ? ' bad' : ''}"><span style="${cssText(replicaCss(g.kind, it.styles))};max-width:100%;overflow:hidden;text-overflow:ellipsis">${escape(it.label)}</span></div>`;
+          return `<div>${visual}<div class="cap"><span>#${it.n} · used ${it.count}×</span>${it.copyOf !== null ? `<b>copy of #${it.copyOf}</b>` : it.rare ? '<span class="warn">used once</span>' : ''}</div></div>`;
+        })
+        .join('')}</div></section>`;
+    })
+    .join('');
 }
 
 export function auditToHtml(audit: Audit, options: ClientReportOptions): string {
   const { snapshot, assumptions: a } = audit;
   const { branding } = options;
-  const summary = summarise(audit, { clientName: options.clientName, dismissed: options.dismissed });
+  const r = healthReport(audit, { clientName: options.clientName, dismissed: options.dismissed });
   const money = (n: number) => formatMoney(n, a.currency);
-  const short = (n: number) => formatMoneyShort(n, a.currency);
-  const n = summary.numbers;
-  const signature = [branding.preparedBy, branding.agencyName].filter(Boolean).join(', ');
+  const f = r.foundations;
+  const layer = (k: string) => r.layers.find((x) => x.key === k)!;
+  const tokens = (label: string) => {
+    const share = f.tokens.find((t) => t.label === label)?.share;
+    return share === null || share === undefined ? '' : ` · ${share}% through tokens`;
+  };
   const contact = [branding.preparedBy, branding.email, branding.website].filter(Boolean).map(escape).join(' · ');
-  const agency = branding.agencyName ? escape(branding.agencyName) : '';
-  const greeting = summary.clientName === 'your product' ? 'Hi there,' : `Hi ${escape(summary.clientName)} team,`;
-  const costRows = summary.painPoints
-    .filter((p) => p.annualCost)
-    .sort((x, y) => (y.annualCost ?? 0) - (x.annualCost ?? 0))
-    .slice(0, 7)
-    .map((p) => ({ label: p.affects, value: p.annualCost!, valueLabel: short(p.annualCost!) }));
+  const s = r.system;
+  const steps = [...new Set([...r.quickWins.map((q) => q.opportunity.title), ...r.top.map((t) => t.point.fixTitle)])].slice(0, 5);
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Design system audit: ${escape(summary.clientName)}</title><style>${STYLES}</style></head>
+<title>Design system health check: ${escape(r.clientName)}</title><style>${STYLES}</style></head>
 <body><main>
-<div class="top">${agency}<span>${escape(formatDate(snapshot.capturedAt))}</span></div>
-
-<section class="cover"><div><h1>${escape(summary.clientName)}</h1>
-<p class="muted">Design system audit · ${summary.pages.length === 1 ? '1 page reviewed' : `${summary.pages.length} pages reviewed`}</p>
-<p class="faint small">${escape(snapshot.url)}</p></div>
+<div class="top">${escape(branding.agencyName)}<span>${escape(formatDate(snapshot.capturedAt))}</span></div>
+<section class="cover"><div><h1>${escape(r.clientName)}</h1>
+<p class="muted">Design system health check · ${r.pages.length === 1 ? escape(r.pages[0]!.url) : `${r.pages.length} pages: ${escape(r.pages.map((p) => p.name).join(', '))}`}</p>
+${branding.note.trim() ? `<p style="margin-top:10px">${escape(branding.note.trim())}</p>` : ''}</div>
 ${snapshot.screenshot ? `<div class="shot"><img src="${snapshot.screenshot}" alt="The audited page"></div>` : ''}</section>
 
-<section class="card"><p><b>${greeting}</b></p><p>${escape(summary.intro)}</p>
-${branding.note.trim() ? `<p>${escape(branding.note.trim())}</p>` : ''}${signature ? `<p class="muted">${escape(signature)}</p>` : ''}</section>
-
-${summary.hook ? `<section class="card"><h3>Something you may not know</h3><p style="margin-top:4px">${escape(summary.hook)}</p></section>` : ''}
-
-<h2>${escape(summary.headline)}</h2><p class="muted">${escape(summary.subheadline)}</p>
-<section class="grid4">
-<div class="card tile"><b>${short(n.yearlyCost)}</b><span>Yearly cost of inconsistency (estimate)</span></div>
-<div class="card tile"><b>${short(n.recoverable)}</b><span>Could be saved every year</span></div>
-<div class="card tile"><b>${n.hoursLost}h</b><span>Team hours lost each year</span></div>
-<div class="card tile"><b>${summary.score}/100</b><span>Consistency score (75+ is healthy)</span></div>
+<section class="layers">
+<div class="card"><span class="small muted">Design system health</span><div class="score">${r.overall.score}<small> /100</small></div><span class="dot ${dot(r.overall.score)}">${escape(r.overall.level)}</span>
+<div class="bar"><i style="width:${r.overall.score}%;background:${barColour(r.overall.score)}"></i></div><span class="small faint">80+ is a mature system</span></div>
+${r.layers
+  .map(
+    (l) => `<div class="card"><h3>${escape(l.label)}</h3><div class="lscore">${l.score} <span class="dot ${dot(l.score)}">${escape(l.level)}</span></div>
+<div class="bar"><i style="width:${l.score}%;background:${barColour(l.score)}"></i></div><p class="small muted">${escape(l.summary)}</p></div>`,
+  )
+  .join('')}
 </section>
-<section class="grid2">
-<div class="card"><h3>Where the cost comes from</h3><p class="small muted">Estimated yearly cost, by problem</p>
-${bars(costRows, Math.max(1, ...costRows.map((r) => r.value)))}</div>
-<div class="card"><h3>Health by area</h3><p class="small muted">Score out of 100, weakest first. 75 and above is healthy.</p>
-${bars([...summary.areas].sort((x, y) => x.score - y.score).map((ar) => ({ label: ar.label, value: ar.score, valueLabel: String(ar.score), dot: ar.status })), 100)}</div>
-</section>
-<p class="small muted">${escape(summary.scoreExplainer)}</p>
 
-<p class="part">Part 1</p><h2>The problems</h2><p class="muted">Where each problem lives, how many places it shows up and what it is likely costing your team. Most important first.</p>
-<section class="grid3">${summary.layers
-  .map((ly) => `<div class="card tile"><span>${escape(ly.layer)}</span><b>${ly.problems === 1 ? '1 problem' : `${ly.problems} problems`}</b><span>${ly.problems ? `${ly.places.toLocaleString('en-US')} places · ${ly.annualCost ? `${money(ly.annualCost)}/yr` : 'risk, not cost'}` : 'Nothing to fix'}</span></div>`)
-  .join('')}</section>
+<section class="card"><p><b>${
+    r.money.yearlyCost > 0
+      ? `We estimate inconsistency costs your team about ${money(r.money.yearlyCost)} a year (${r.money.yearlyHours.toLocaleString('en-US')} hours).`
+      : `${escape(r.clientName)} is built consistently: there is little design debt to pay down.`
+  }</b></p>${r.money.savedHours.likely ? `<p class="small muted">A design system would have saved about ${r.money.savedHours.likely} hours of work so far (likely ${r.money.savedHours.low} to ${r.money.savedHours.high}). Planning estimates for a team of ${a.contributors}.</p>` : ''}</section>
+
 ${
-  summary.painPoints.length
-    ? `<section class="card tablecard"><table><tr><th>#</th><th>Problem</th><th>Affects</th><th class="num">Places</th><th class="num">Cost a year</th><th>Priority</th></tr>${summary.painPoints
+  r.top.length
+    ? `<h2>Fix these three first</h2>${r.top
         .map(
-          (p, i) => `<tr><td class="muted">${i + 1}</td><td><b>${escape(p.title)}</b></td><td class="muted">${escape(p.affects)}</td><td class="num">${p.count.toLocaleString('en-US')}</td>
-<td class="num">${p.annualCost ? money(p.annualCost) : '<span class="faint">—</span>'}</td><td><span class="dot ${PRIORITY[p.severity].dot}">${PRIORITY[p.severity].label}</span></td></tr>`,
+          (t, i) => `<section class="card top3"><div>${findingVisual(audit, t)}</div><div><p class="small muted">${i + 1} · ${escape(layer(t.layer).label)} · ${escape(t.point.affects)}</p>
+<h3 style="margin-top:2px">${escape(t.point.title)}</h3><p class="muted small" style="margin-top:4px">${escape(t.point.summary)}</p><p class="small" style="margin-top:6px"><b>Fix: ${escape(t.point.fixTitle)}.</b></p></div></section>`,
         )
-        .join('')}</table></section>
-${galleryHtml(audit)}
-${summary.painPoints.map((p, i) => problemHtml(p, i + 1, money)).join('')}`
-    : '<p class="muted">We didn’t find any problems worth reporting.</p>'
+        .join('')}`
+    : ''
 }
-${accessibilityHtml(audit)}
 
+${PART(2, 'Foundations', `The token layer: the colours, text styles, spacing and shapes everything else is built from. ${layer('foundations').summary}`, layer('foundations'))}
+<section class="card"><h3>Colour</h3><p class="small muted">${f.colours.total} colours in use${f.colours.copies ? `, ${f.colours.copies} of them near-copies nobody could tell apart` : ''}${tokens('Color')}.</p>
+<div class="pal" style="margin-top:12px">${f.colours.palette.map((c) => `<div class="sw2"><i style="background:${escape(c.main)}"></i>${escape(c.main)}${c.copies.length ? `<em>+${c.copies.length}</em>` : ''}</div>`).join('')}</div>
 ${
-  summary.fixes.length
-    ? `<p class="part break">Part 2</p><h2>The fixes</h2><p class="muted">What we would do about each problem, and what each fix is realistically worth: about ${money(summary.fixes.reduce((t, f) => t + (f.annualSaving ?? 0), 0))} a year together. Numbers match the problems in Part 1.</p>
-<section class="card tablecard"><table><tr><th>#</th><th>Fix</th><th class="num">Saves a year</th></tr>${summary.fixes
-        .map((f) => `<tr><td class="muted">${f.problem}</td><td><b>${escape(f.title)}</b><div class="small muted">${escape(f.detail)}</div></td><td class="num">${f.annualSaving ? `<b>${money(f.annualSaving)}</b>` : '<span class="faint">—</span>'}</td></tr>`)
-        .join('')}</table></section>
+  f.colours.palette.some((c) => c.copies.length)
+    ? `<p class="label">Near-copies, and where they are used</p><table>${f.colours.palette
+        .filter((c) => c.copies.length)
+        .slice(0, 5)
+        .map(
+          (c) => `<tr><td style="width:120px"><span class="sw"><i style="background:${escape(c.main)}"></i>${escape(c.main)} (keep)</span></td><td>${c.copies
+            .map((x) => `<span class="sw"><i style="background:${escape(x.hex)};box-shadow:inset 0 0 0 2px var(--danger)"></i>${escape(x.hex)}</span>${x.shot ? `<img src="${x.shot.src}" alt="Where ${escape(x.hex)} is used" style="height:28px;vertical-align:middle;margin-right:12px;border-radius:4px;box-shadow:0 0 0 1px var(--border)">` : ''}`)
+            .join('')}</td></tr>`,
+        )
+        .join('')}</table>`
+    : ''
+}</section>
 ${
-  summary.beforeAfter.length
-    ? `<section class="card"><h3>After the cleanup</h3><p class="small muted">Distinct styles to maintain, today versus after the fixes. <span class="sw"><i style="background:var(--text)"></i>after cleanup</span><span class="sw"><i style="background:var(--border)"></i>removed</span></p>
-<div class="bars">${summary.beforeAfter
-        .map((r) => {
-          const max = Math.max(...summary.beforeAfter.map((x) => x.today));
-          return `<span>${escape(r.label)}</span><span class="track" style="background:none"><b style="width:${(r.today / max) * 100}%"></b><i style="width:${Math.max(3, (r.after / max) * 100)}%"></i></span><span class="val">${r.today} → ${r.after}</span>`;
-        })
+  f.type.steps.length
+    ? `<section class="card tablecard"><div style="padding:16px 18px 4px"><h3>Typography</h3><p class="small muted">${f.type.steps.length} text sizes${f.type.families.length ? ` in ${escape(f.type.families.slice(0, 3).join(', '))}` : ''}${f.type.scaleNote ? `; ${escape(f.type.scaleNote)}` : ''}${tokens('Typography')}.</p></div>
+<table class="ramp">${f.type.steps
+        .slice(0, 14)
+        .map(
+          (t) => `<tr><td style="width:56px"><b>${t.px}px</b></td><td class="small muted" style="width:40px">${t.count}×</td><td>${t.shot ? img(t.shot, `Text at ${t.px}px`) : `<span style="font-size:${Math.min(t.px, 32)}px">The quick brown fox</span>`}</td>
+<td class="num">${t.nearCopyOf ? `<span class="flag">≈ ${t.nearCopyOf}px, near-copy</span>` : t.offScale ? '<span class="warn">off the scale</span>' : ''}</td></tr>`,
+        )
+        .join('')}</table></section>`
+    : ''
+}
+${
+  f.spacing.values.length
+    ? `<section class="card"><h3>Spacing</h3><p class="small muted">${Math.round(f.spacing.fit * 100)}% of uses follow a ${f.spacing.base}px grid${tokens('Spacing')}. Red values are off the grid.</p>
+<div class="ruler" style="margin-top:10px">${f.spacing.values
+        .filter((v) => v.px <= 64)
+        .map((v) => `<span class="${v.onGrid ? '' : 'off'}">${v.px}px</span><span><i style="width:${Math.max(2, v.px * 3)}px"></i></span><span class="val">${v.count}×</span>`)
         .join('')}</div></section>`
     : ''
-}`
-    : ''
 }
+<section class="grid2"><div class="card"><h3>Shape & depth</h3><p class="small muted">${f.radii.length} corner styles${f.shadows.distinct ? `, ${f.shadows.distinct} shadows (about ${f.shadows.needed} would do)` : ''}.</p>
+<div class="chips">${f.radii.map((x) => `<span style="display:inline-grid;place-items:center;width:44px;height:28px;border:1.5px solid var(--text);border-radius:${x.value === 'full' ? '14px' : escape(x.value)}" title="${x.count}×"></span><span class="small muted">${escape(x.value)} · ${x.count}×</span>`).join('')}</div></div>
+<div class="card"><h3>Managed with tokens</h3><p class="small muted">Named tokens change everywhere in one edit.</p><div class="bars">${f.tokens
+    .filter((t) => t.share !== null)
+    .map((t) => `<span>${escape(t.label)}</span><span class="track"><i style="width:${Math.max(3, t.share!)}%;background:${barColour(t.share!)}"></i></span><span class="val">${t.share}%</span>`)
+    .join('')}</div></div></section>
 
-${systemHtml(audit, summary.clientName)}
+${PART(3, 'Components', `The building blocks. Every style we found, photographed from your pages and numbered; near-copies and one-offs are marked. ${layer('components').summary}`, layer('components'))}
+${componentsHtml(r.components)}
 
-<p class="part break">Part 3</p><h2>What’s working well</h2><p class="muted">Parts of your product that are already consistent. Worth protecting as the product grows.</p>
-${
-  summary.strengths.length
-    ? `<section class="grid2">${summary.strengths.map((st) => `<div class="card"><h3><span class="dot strong"></span> ${escape(st.title)}</h3><p class="small muted" style="margin-top:4px">${escape(st.detail)}</p></div>`).join('')}</section>`
-    : ''
-}
-${
-  summary.healthyMetrics.length
-    ? `<section class="card tablecard"><table><tr><th>Building block</th><th>In use</th><th>Status</th></tr>${summary.healthyMetrics
-        .map((m) => `<tr><td><b>${escape(m.label)}</b></td><td class="muted">${escape(m.found)}</td><td><span class="dot strong">${STATUS_LABELS[m.status]}</span></td></tr>`)
-        .join('')}</table></section>`
-    : ''
-}
-${summary.strengths.length + summary.healthyMetrics.length === 0 ? '<p class="muted">Every area has room to improve, which also means every fix above pays off quickly.</p>' : ''}
+${PART(4, 'Accessibility', `${r.accessibility.report.headline} Each check maps to a WCAG success criterion; the failing elements are shown below.`, layer('accessibility'))}
+<section class="card tablecard"><table><tr><th>Check</th><th>WCAG</th><th>Who it affects</th><th>Result</th></tr>${r.accessibility.report.checks
+  .filter((c) => c.status !== 'not-applicable')
+  .map(
+    (c) => `<tr><td><b>${escape(c.name)}</b></td><td class="muted">${c.sc} (${c.level}${c.version === '2.2' ? ', 2.2' : ''})</td><td class="small muted">${escape(c.impact)}</td>
+<td>${c.status === 'fail' ? `<span class="dot at-risk">Fails: ${c.failed} of ${c.checked}</span>` : '<span class="dot strong">Passes</span>'}</td></tr>`,
+  )
+  .join('')}</table></section>
+${r.accessibility.examples.map((e) => `<section class="card"><h3>${escape(e.title)}</h3><div class="grid4c">${e.shots.slice(0, 4).map((x) => shotHtml(x, e.title)).join('')}</div></section>`).join('')}
+<p class="small muted">${r.accessibility.uncheckedText ? `${r.accessibility.uncheckedText} more pieces of text looked unreadable in the code but sit on images or panels we couldn't confirm on screen, so we left them out. ` : ''}${escape(r.accessibility.report.regulation)} Needs a manual review: ${escape(r.accessibility.report.manual.join('; '))}.</p>
 
-${
-  summary.pages.length > 1
-    ? `<h2>Pages we reviewed</h2><section class="card tablecard"><table><tr><th>Page</th><th>Address</th><th class="num">Elements</th></tr>${summary.pages
-        .map((p) => `<tr><td><b>${escape(p.name)}</b></td><td class="small muted">${escape(p.url)}</td><td class="num">${p.elements}</td></tr>`)
-        .join('')}</table></section>`
-    : ''
-}
-
-<h2>How we worked this out</h2>
-<p class="muted">We opened your product in a normal browser and measured it the way your customers see it: ${snapshot.rendered.elements.length.toLocaleString('en-US')} visible elements and the ${snapshot.authored.declarations.length.toLocaleString('en-US')} styling rules behind them. We didn’t need access to your code, files or team.</p>
-<p class="muted">The money figures are estimates, not invoices. They assume about ${a.contributors} people regularly design or build your product, at around ${money(a.hourlyRate)} an hour. Every unnecessary colour, size or spacing value costs each of them roughly ${a.hoursPerExcessValue} hours a year, every unnecessary component style about ${a.hoursPerExcessVariant} hours, and every hand-typed value about ${a.minutesPerLiteralEdit} minutes to change during a redesign. We count only ${Math.round(a.realisationRate * 100)}% of the total as realistically recoverable.</p>
-<p class="muted">Other pages, screen sizes and states weren’t part of this review, so the real picture is usually a little bigger, not smaller.</p>
-
-<h2>Words used in this report</h2>
-<section class="card tablecard"><table>${summary.glossary.map((g) => `<tr><td style="width:180px"><b>${escape(g.term)}</b></td><td class="muted">${escape(g.meaning)}</td></tr>`).join('')}</table></section>
-
-<h2>${agency ? `How ${agency} can help` : 'How we can help'}</h2>
-<section class="card"><p>If any of this is useful, ${agency ? `${agency} would` : 'we’d'} be glad to talk it through. We help product teams turn findings like these into a working design system: a small set of named colours, text styles and spacing, and components that get reused rather than rebuilt. Happy to walk your team through the report, or to answer questions about any of it, with no obligation.</p>
-${contact ? `<p><b>${contact}</b></p>` : ''}</section>
-
-<footer>${escape(summary.clientName)} · Design system audit${agency ? ` · Prepared by ${agency}` : ''}</footer>
+${PART(5, 'Your design system, extracted', `We turned the ${s.before} values your product uses today into ${s.after} named tokens, built from your own colours, sizes and spacing. Reply and we'll send it as a ready-to-use file (CSS variables and design-token JSON).`)}
+<section class="card"><h3>Colour tokens</h3><div class="pal" style="margin-top:10px">${s.tokens
+  .filter((t) => t.category === 'color' && !t.alias)
+  .map((t) => `<div class="sw2" style="width:84px"><i style="background:${escape(t.value)}"></i><b style="color:var(--text)">${escape(t.name.replace('color-', ''))}</b><br>${escape(t.value)}</div>`)
+  .join('')}</div></section>
+<section class="card">${s.groups
+  .filter((g) => ['font-size', 'font-weight', 'spacing', 'radius'].includes(g.category))
+  .map((g) => `<p class="label">${escape(g.label)}</p><p class="small muted">${g.tokens.map((t) => `<code>--${escape(t.name)}</code> ${escape(t.value)}`).join(' · ')}</p>`)
+  .join('')}</section>
+${steps.length ? `<h2>What we would do first</h2><section class="card"><ol style="margin:0;padding-left:18px">${steps.map((x) => `<li style="margin:4px 0">${escape(x)}</li>`).join('')}</ol></section>` : ''}
+<section class="card"><h3>How ${branding.agencyName ? escape(branding.agencyName) : 'we'} can help</h3><p class="muted" style="margin-top:4px">We help product teams turn findings like these into a working design system: a small set of named colours, text styles and spacing, and components that get reused rather than rebuilt. Happy to walk your team through this report, with no obligation.</p>
+${hasContact(branding) ? `<p style="margin-top:8px"><b>${contact}</b></p>` : ''}</section>
+<p class="small faint">How we worked this out: we opened ${r.pages.length === 1 ? 'your page' : `${r.pages.length} of your pages`} in a normal browser and measured ${snapshot.rendered.elements.length.toLocaleString('en-US')} visible elements and ${snapshot.authored.declarations.length.toLocaleString('en-US')} styling rules; every picture is a screenshot of your live pages. Money figures are planning estimates for a team of about ${a.contributors} at ${money(a.hourlyRate)} an hour, not invoices. Pages: ${escape(r.pages.map((p) => p.url).join(', '))}.</p>
+<footer>${escape(r.clientName)} · Design system health check</footer>
 </main></body></html>`;
 }

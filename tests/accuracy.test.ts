@@ -96,3 +96,26 @@ describe('business case for a product that already has a system', () => {
     expect(b.causes.some((c) => c.label === 'Missing focus states')).toBe(false);
   });
 });
+
+describe('balwaan.com report fixes', () => {
+  it('does not report near-invisible contrast it cannot verify, but does once pixels confirm it', () => {
+    const snap = makeSnapshot({ elements: [{ text: 'STATES SERVED', selector: '.stat', styles: { color: 'rgb(255, 255, 255)' } }] });
+    expect(analyse(snap).accessibility).toMatchObject({ contrastFailures: [], contrastUnverified: 1 });
+    // Real pixels show the text sits on a dark panel: it passes.
+    const dark = { ...snap, evidence: { '.stat': { src: '', w: 1, h: 1, backdrop: '#1a1a1a' } } };
+    expect(analyse(dark).accessibility.contrastFailures).toEqual([]);
+    // Real pixels show a pale background: now it is a verified failure.
+    const pale = { ...snap, evidence: { '.stat': { src: '', w: 1, h: 1, backdrop: '#dddddd' } } };
+    expect(analyse(pale).accessibility.contrastFailures[0]).toMatchObject({ selector: '.stat', verified: true });
+  });
+
+  it('ignores text at font-size 0', () => {
+    const typography = analyse(makeSnapshot({ elements: [{ text: 'Previous', styles: { fontSize: '0px' } }, { text: 'Body', styles: { fontSize: '16px' } }] })).foundations.typography;
+    expect(typography.groups.find((g) => g.key === 'font-size')!.values.map((v) => v.value)).toEqual(['16']);
+  });
+
+  it('only reports keyboard focus when an outline is actually removed', () => {
+    const audit = runAudit(makeSnapshot({ elements: [{ text: 'Hi' }] }), DEFAULT_ASSUMPTIONS);
+    expect(audit.analysis.opportunities.find((o) => o.kind === 'missing-focus-style')?.severity ?? 'low').toBe('low');
+  });
+});

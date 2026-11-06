@@ -23,7 +23,7 @@ import { useReports } from '../use-reports';
 export function Header() {
   const controller = useController();
   const { tab, audit, status, capturability, hostAccess } = useAuditState();
-  const { view, openSettings, openReportDetails } = useNavigation();
+  const { view, openSettings, openReportDetails, openSiteCapture } = useNavigation();
   const reports = useReports();
 
   const subtitle = audit
@@ -47,6 +47,10 @@ export function Header() {
           },
         ]
       : []),
+    {
+      label: 'Capture',
+      items: [{ label: 'Capture site (up to 6 pages)…', icon: <GlobeIcon />, onSelect: openSiteCapture }],
+    },
     {
       label: 'Settings',
       items: [

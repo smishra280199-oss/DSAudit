@@ -4,7 +4,8 @@
  * tabs, storage and runtime messaging.
  */
 
-import type { CaptureApi } from '../../capture';
+import type { CaptureApi, PageLink } from '../../capture';
+import { collectEvidence } from './evidence';
 import type { FetchedSheet } from '../../capture/stylesheets';
 import { RUNTIME_MESSAGES, type RuntimeMessage } from '../../shared/messages';
 import type { KeyValueStore } from '../../storage/kv';
@@ -117,6 +118,57 @@ export class ChromeBridge implements Bridge {
 
   async setInspectMode(tab: TabInfo, on: boolean) {
     await this.run(tab, (value: boolean) => (window as unknown as CaptureGlobal).__dslintCapture.setInspectMode(value), [on]);
+  }
+
+  private lastShot = 0;
+
+  collectEvidence(tab: TabInfo, selectors: string[], onProgress?: (done: number, total: number) => void) {
+    const api = () => (window as unknown as CaptureGlobal).__dslintCapture;
+    return collectEvidence(
+      {
+        frame: (s, focus) => this.run(tab, (sel: string[], f: string) => api().frame(sel, f), [s, focus]),
+        endFrame: () => this.run(tab, () => api().endFrame(), []),
+        finish: () => this.run(tab, () => api().finishShots(), []),
+        screenshot: async () => {
+          if (tab.windowId === undefined) return null;
+          // Chrome allows about two screenshots a second.
+          const wait = this.lastShot + 600 - Date.now();
+          if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+          this.lastShot = Date.now();
+          try {
+            return await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+          } catch {
+            return null;
+          }
+        },
+      },
+      selectors,
+      onProgress,
+    );
+  }
+
+  discoverPages(tab: TabInfo): Promise<PageLink[]> {
+    return this.run(tab, () => (window as unknown as CaptureGlobal).__dslintCapture.discoverPages(), []);
+  }
+
+  async navigate(tab: TabInfo, url: string): Promise<TabInfo | null> {
+    const loaded = new Promise<void>((resolve) => {
+      const timer = setTimeout(done, 30_000);
+      function done() {
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(onUpdated);
+        resolve();
+      }
+      function onUpdated(id: number, change: { status?: string }) {
+        if (id === tab.id && change.status === 'complete') done();
+      }
+      chrome.tabs.onUpdated.addListener(onUpdated);
+    });
+    await chrome.tabs.update(tab.id, { url });
+    await loaded;
+    // Let late content (lazy images, client-side rendering) arrive.
+    await new Promise((r) => setTimeout(r, 1500));
+    return toTabInfo(await chrome.tabs.get(tab.id));
   }
 
   onInspect(listener: InspectListener) {

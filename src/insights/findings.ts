@@ -74,6 +74,8 @@ const STYLE_NAMES: Partial<Record<StyleKey, string>> = {
 
 const SEVERITY_RANK: Record<Severity, number> = { high: 3, medium: 2, low: 1 };
 
+const TAG_NAMES: Record<string, string> = { a: 'link', h1: 'heading', h2: 'heading', h3: 'heading', h4: 'heading', h5: 'heading', h6: 'heading', button: 'button', input: 'field', textarea: 'text box', select: 'dropdown', div: 'box', section: 'section', span: 'label', img: 'image' };
+
 /** Example names for a component's intentional styles, so suggestions fit the component. */
 const VARIANT_EXAMPLES: Record<ComponentAnalysis['kind'], string> = {
   button: 'primary, secondary and danger',
@@ -245,7 +247,7 @@ function spacing({ audit, d, lineCost }: Context): PainPoint | null {
 // ── Components ────────────────────────────────────────────────────────────
 
 function variantLabel(v: ComponentVariant): string {
-  return v.sampleText ? `“${v.sampleText.slice(0, 28)}”` : `a ${v.tag}`;
+  return v.sampleText ? `“${v.sampleText.slice(0, 28)}”` : `Untitled ${TAG_NAMES[v.tag] ?? 'element'}`;
 }
 
 function differences(a: ComponentVariant, b: ComponentVariant): string[] {
@@ -385,10 +387,9 @@ function contrast({ audit, d }: Context): PainPoint | null {
 }
 
 function keyboard({ audit }: Context): PainPoint | null {
-  const { interaction } = audit.analysis;
-  const removed = interaction.outlineRemovedWithoutReplacement;
-  const missing = interaction.interactiveCount - interaction.withFocus;
-  if (removed.length === 0 && (interaction.focusCoverage ?? 1) >= 0.6) return null;
+  // Only a removed outline is a WCAG failure (2.4.7). Relying on the browser's own focus ring is fine.
+  const removed = audit.analysis.interaction.outlineRemovedWithoutReplacement;
+  if (removed.length === 0) return null;
   const what = removed.some((r) => /input|field|select|textarea/i.test(r.selector))
     ? 'your form fields'
     : removed.some((r) => /btn|button/i.test(r.selector))
@@ -396,22 +397,20 @@ function keyboard({ audit }: Context): PainPoint | null {
       : 'some controls';
   return {
     id: 'keyboard',
-    area: 'interaction',
+    area: 'accessibility',
     layer: 'Elements',
     affects: 'Keyboard access',
-    count: removed.length ? Math.max(1, missing) : missing,
-    countLabel: 'controls without a visible focus style',
-    summary: removed.length ? `The focus outline is switched off on ${what}, with nothing in its place.` : 'Controls rely on the browser’s default focus outline.',
-    fixTitle: 'Add one visible focus style everywhere',
-    severity: removed.length > 0 ? 'high' : 'medium',
-    title: removed.length ? 'Keyboard users can lose track of where they are' : `${plural(missing, 'control has', 'controls have')} no visible focus style`,
-    story: removed.length
-      ? `When someone moves through a page with the Tab key, the browser draws an outline around the focused element. On ${what}, that outline has been switched off and nothing replaces it, so keyboard users can’t see where they are.`
-      : `${plural(missing, 'of your interactive elements relies', 'of your interactive elements rely')} on the browser’s default focus outline, which often clashes with the design or disappears against it.`,
-    where: [],
+    count: removed.length,
+    countLabel: removed.length === 1 ? 'style that hides the focus outline' : 'styles that hide the focus outline',
+    summary: `The focus outline is switched off on ${what}, with nothing in its place.`,
+    fixTitle: 'Bring back a visible focus style',
+    severity: 'high',
+    title: 'Keyboard users can lose track of where they are',
+    story: `When someone moves through a page with the Tab key, the browser draws an outline around the focused element. On ${what}, that outline has been switched off and nothing replaces it, so keyboard users can’t see where they are.`,
+    where: removed.slice(0, 4).map((r) => r.selector),
     pages: [],
     evidence: { kind: 'none' },
-    why: 'Keyboard navigation is used by power users and by people who can’t use a mouse. A missing focus indicator is one of the most common accessibility failures.',
+    why: 'Keyboard navigation is used by power users and by people who can’t use a mouse. A missing focus indicator is one of the most common accessibility failures (WCAG 2.4.7).',
     suggestion: 'Add one consistent focus style (for example a 2px ring in your brand colour) and apply it to every interactive element.',
     annualCost: null,
     annualHours: null,

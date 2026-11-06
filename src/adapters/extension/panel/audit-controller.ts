@@ -6,6 +6,8 @@
 
 import { compareAudits, runAudit, withAssumptions, type Audit } from '../../../audit';
 import { mergeSnapshots } from '../../../audit/merge';
+import { planEvidence } from '../../../insights/evidence-plan';
+import type { PageLink } from '../../../capture';
 import { selectorsForPage } from '../../../shared/page-scope';
 import type { InspectResult } from '../../../inspect/types';
 import { DEFAULT_ASSUMPTIONS, type SavingsAssumptions } from '../../../savings';
@@ -34,6 +36,8 @@ export interface AuditState {
   tab: TabInfo | null;
   capturability: CapturabilityReason;
   status: CaptureStatus;
+  /** What a long capture is doing right now, e.g. "Page 2 of 6 · screenshots 8 of 20". */
+  progress: string | null;
   error: string | null;
   audit: Audit | null;
   /** The audit being compared against the current one, if any. */
@@ -54,6 +58,14 @@ export interface AuditState {
 
 type Listener = () => void;
 
+function pathOf(url: string): string {
+  try {
+    return new URL(url).pathname || '/';
+  } catch {
+    return url;
+  }
+}
+
 function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -64,6 +76,7 @@ export class AuditController {
     tab: null,
     capturability: 'ok',
     status: 'idle',
+    progress: null,
     error: null,
     audit: null,
     baseline: null,
@@ -176,14 +189,104 @@ export class AuditController {
         await this.bridge.storage.set({ [HOST_ACCESS_ASKED_KEY]: true });
         this.set({ hostAccess: granted });
       }
-      const { page, hostAccess } = await this.bridge.capture(tab);
-      const screenshot = (await this.bridge.captureScreenshot(tab)) ?? undefined;
-      const snapshot: PageSnapshot = { ...page, id: newId(), favIconUrl: tab.favIconUrl, hostAccess, screenshot };
-      const audit = runAudit(snapshot, this.state.assumptions!);
-      await this.store.save(snapshot, audit.score.overall);
-      this.set({ status: 'idle', audit, baseline: null, dismissed: [], history: await this.store.list(), hostAccess });
+      const { audit, hostAccess } = await this.captureOne(tab);
+      this.set({ status: 'idle', progress: null, audit, baseline: null, dismissed: [], history: await this.store.list(), hostAccess });
     } catch (error) {
-      this.set({ status: 'error', error: error instanceof Error ? error.message : String(error) });
+      this.set({ status: 'error', progress: null, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  /**
+   * Captures the page, then photographs the elements the report will cite
+   * and re-runs the audit with them: contrast is re-checked against the real
+   * pixels behind the text. Saves the snapshot.
+   */
+  private async captureOne(tab: TabInfo, label = ''): Promise<{ audit: Audit; hostAccess: boolean }> {
+    this.set({ progress: `${label}Reading the page…` });
+    const { page, hostAccess } = await this.bridge.capture(tab);
+    const screenshot = (await this.bridge.captureScreenshot(tab)) ?? undefined;
+    let snapshot: PageSnapshot = { ...page, id: newId(), favIconUrl: tab.favIconUrl, hostAccess, screenshot };
+    let audit = runAudit(snapshot, this.state.assumptions!);
+    const plan = planEvidence(audit);
+    if (plan.length > 0) {
+      this.set({ progress: `${label}Taking screenshots…` });
+      const evidence = await this.bridge
+        .collectEvidence(tab, plan, (done, total) => this.set({ progress: `${label}Screenshots ${done} of ${total}` }))
+        .catch(() => ({}));
+      if (Object.keys(evidence).length > 0) {
+        snapshot = { ...snapshot, evidence };
+        audit = runAudit(snapshot, this.state.assumptions!);
+      }
+    }
+    await this.store.save(snapshot, audit.score.overall);
+    return { audit, hostAccess };
+  }
+
+  // ── Whole-site capture ─────────────────────────────────────────────────
+
+  private cancelled = false;
+
+  /** The site's main pages, one per template, for the "Capture site" picker. */
+  async suggestPages(): Promise<PageLink[]> {
+    const { tab } = this.state;
+    if (!tab || this.state.capturability !== 'ok') return [];
+    try {
+      return await this.bridge.discoverPages(tab);
+    } catch {
+      return [];
+    }
+  }
+
+  cancelSiteCapture(): void {
+    this.cancelled = true;
+  }
+
+  /**
+   * Captures the open page and every URL given, one after another in this
+   * tab, then audits them together and returns the tab to where it started.
+   * Call from a click handler (the first capture may ask for site access).
+   */
+  async captureSite(urls: string[]): Promise<void> {
+    const start = this.state.tab;
+    if (!start || this.state.capturability !== 'ok' || this.state.status === 'capturing') return;
+    const permission = this.hostAccessAsked ? null : this.bridge.requestHostAccess();
+    this.cancelled = false;
+    this.set({ status: 'capturing', error: null });
+    const ids: string[] = [];
+    const targets = [start.url, ...urls.filter((u) => u !== start.url)];
+    try {
+      if (permission) {
+        const granted = await permission.catch(() => false);
+        this.hostAccessAsked = true;
+        await this.bridge.storage.set({ [HOST_ACCESS_ASKED_KEY]: true });
+        this.set({ hostAccess: granted });
+      }
+      let tab: TabInfo | null = start;
+      for (const [i, url] of targets.entries()) {
+        if (this.cancelled) break;
+        const label = `Page ${i + 1} of ${targets.length} · `;
+        if (i > 0) {
+          this.set({ progress: `${label}Opening ${pathOf(url)}…` });
+          tab = await this.bridge.navigate(tab!, url);
+          if (!tab || capturability(tab.url) !== 'ok') continue;
+        }
+        try {
+          const { audit } = await this.captureOne(tab!, label);
+          ids.push(audit.snapshot.id);
+        } catch {
+          // A page that fails (a login wall, a download) is skipped; the rest still count.
+        }
+      }
+      if (tab && tab.url !== start.url) await this.bridge.navigate(tab, start.url);
+      const history = await this.store.list();
+      const collected = ids.map((id) => history.find((m) => m.id === id)).filter((m): m is SnapshotMeta => m !== undefined);
+      this.set({ history, status: 'idle', progress: null });
+      await this.saveCollection(collected);
+      if (collected.length >= 2) await this.auditCollection();
+      else if (collected[0]) await this.open(collected[0].id);
+      this.notify(this.cancelled ? `Stopped. ${collected.length} pages captured.` : `${collected.length} pages captured and audited together.`);
+    } catch (error) {
+      this.set({ status: 'error', progress: null, error: error instanceof Error ? error.message : String(error) });
     }
   }
 

@@ -18,6 +18,7 @@ export interface Navigation {
   reportVersion: ReportVersion;
   openReport: (version: ReportVersion) => void;
   openSettings: () => void;
+  openSiteCapture: () => void;
   openReportDetails: () => void;
 }
 

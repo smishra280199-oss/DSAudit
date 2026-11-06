@@ -57,7 +57,7 @@ describe('savings', () => {
 
 describe('comparing audits', () => {
   it('reports per-area deltas', () => {
-    const before = runAudit(makeSnapshot({ elements: [{ text: 'Faint', styles: { color: 'rgb(220, 220, 220)' } }] }), DEFAULT_ASSUMPTIONS);
+    const before = runAudit(makeSnapshot({ elements: [{ text: 'Faint', styles: { color: 'rgb(170, 170, 170)' } }] }), DEFAULT_ASSUMPTIONS);
     const after = runAudit(makeSnapshot({ elements: [{ text: 'Dark', styles: { color: 'rgb(20, 20, 20)' } }] }), DEFAULT_ASSUMPTIONS);
     const diff = compareAudits(before, after);
     expect(diff.areas.find((a) => a.key === 'accessibility')!.delta).toBeGreaterThan(0);

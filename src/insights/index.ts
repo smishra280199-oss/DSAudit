@@ -291,7 +291,7 @@ export function summarise(audit: Audit, options: { clientName?: string; dismisse
       .sort((a, b) => b.excess / b.current - a.excess / a.current)
       .map((l) => ({ label: METRIC_LABELS[l.key]?.label ?? l.label.replace(' variants', ' styles'), today: l.current, after: l.recommended })),
     strengths: areas
-      .filter((a) => a.status === 'strong')
+      .filter((a) => a.status === 'strong' && !painPoints.some((p) => p.area === a.key && p.severity !== 'low'))
       .sort((a, b) => b.score - a.score)
       .map((a) => ({ title: a.label, detail: a.impact })),
     areas,

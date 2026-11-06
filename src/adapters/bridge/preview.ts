@@ -72,6 +72,23 @@ export class PreviewBridge implements Bridge {
     this.captureApi().setInspectMode(on);
   }
 
+  /** An iframe can't be screenshotted from script: reports fall back to redrawn replicas. */
+  async collectEvidence() {
+    return {};
+  }
+
+  async discoverPages() {
+    return this.captureApi().discoverPages();
+  }
+
+  /** Loads another page of the demo site into the frame. */
+  navigate(_tab: TabInfo, url: string): Promise<TabInfo | null> {
+    return new Promise((resolve) => {
+      this.frame.addEventListener('load', () => void this.activeTab().then(resolve), { once: true });
+      this.frame.src = url;
+    });
+  }
+
   onInspect(listener: InspectListener) {
     this.inspectListeners.add(listener);
     return () => this.inspectListeners.delete(listener);

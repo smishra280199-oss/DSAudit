@@ -31,9 +31,10 @@ describe('client reports', () => {
     const html = auditToHtml(audit, options);
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('Acme &amp; Co');
-    expect(html).toContain('We estimate inconsistency is costing your team');
-    expect(html).toContain('Where the cost comes from');
-    expect(html).toMatch(/Part 1<\/p><h2>The problems[\s\S]*Part 2<\/p><h2>The fixes[\s\S]*Part 3<\/p><h2>What’s working well/);
+    expect(html).toContain('We estimate inconsistency costs your team');
+    expect(html).toContain('Fix these three first');
+    // The three layers, then next steps, in order.
+    expect(html).toMatch(/2 of 5[\s\S]*<h2>Foundations[\s\S]*3 of 5[\s\S]*<h2>Components[\s\S]*4 of 5[\s\S]*<h2>Accessibility[\s\S]*5 of 5[\s\S]*<h2>Your design system, extracted/);
     expect(html).not.toMatch(/payback|one-time cleanup|cleanup cost/i);
     expect(html).toContain('How Northbeam Studio can help');
     expect(html).toContain('sam@northbeam.test');
@@ -44,7 +45,7 @@ describe('client reports', () => {
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-');
     const pdf = await PDFDocument.load(bytes);
     expect(pdf.getPageCount()).toBeGreaterThanOrEqual(3);
-    expect(pdf.getTitle()).toBe('Design System Audit: Acme & Co');
+    expect(pdf.getTitle()).toBe('Design system health check: Acme & Co');
     expect(pdf.getAuthor()).toBe('Northbeam Studio');
   });
 
@@ -52,6 +53,14 @@ describe('client reports', () => {
     const tidy = runAudit(makeSnapshot({ elements: [{ text: 'Hi' }] }), DEFAULT_ASSUMPTIONS);
     const bytes = await auditToPdf(tidy, { branding: EMPTY_BRANDING, clientName: 'Tidy' });
     expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThanOrEqual(2);
+  });
+
+  it('shows real screenshots when the capture took them', () => {
+    const shot = { src: 'data:image/jpeg;base64,AAAA', w: 80, h: 30 };
+    const first = audit.analysis.components.find((c) => c.variants.length > 1)?.variants[0]?.selectors[0];
+    const withShots = runAudit({ ...messy, evidence: first ? { [first]: shot } : {} }, DEFAULT_ASSUMPTIONS);
+    const html = auditToHtml(withShots, options);
+    if (first) expect(html).toContain('src="data:image/jpeg;base64,AAAA"');
   });
 
   it('summarises the findings in Markdown for an email', () => {

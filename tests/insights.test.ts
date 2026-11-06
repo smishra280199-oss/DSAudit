@@ -108,7 +108,10 @@ describe('executive summary', () => {
       expect(f.annualSaving).toBe(p.annualCost ? Math.round(p.annualCost * DEFAULT_ASSUMPTIONS.realisationRate) : null);
     });
     expect(summary.beforeAfter.every((b) => b.after < b.today)).toBe(true);
-    const strongAreas = summary.areas.filter((a) => a.status === 'strong').map((a) => a.label);
+    // Strong areas, minus any that still has a finding worth fixing: the report never contradicts itself.
+    const strongAreas = summary.areas
+      .filter((a) => a.status === 'strong' && !summary.painPoints.some((p) => p.area === a.key && p.severity !== 'low'))
+      .map((a) => a.label);
     expect(summary.strengths.map((s) => s.title).sort()).toEqual(strongAreas.sort());
   });
 

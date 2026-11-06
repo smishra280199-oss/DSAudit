@@ -9,6 +9,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { componentGallery, replicaCss, type GalleryGroup } from '../../../../insights/gallery';
 import { starterSystem } from '../../../../insights/starter-system';
 import { accessibilityReport } from '../../../../insights/wcag';
+import { healthReport } from '../../../../insights/health';
 import { slug } from '../../../../report/format';
 import { Badge, Button, Card, CopyIcon, DownloadIcon, List, Row, TargetIcon } from '../ui';
 import { copyText, download } from '../export';
@@ -41,9 +42,13 @@ function GalleryGroupView({ group }: { group: GalleryGroup }) {
               aria-label={`Style ${item.n}: “${item.label}”, used ${item.count} times${item.copyOf ? `, a near-copy of style ${item.copyOf}` : ''}. Show on page.`}
             >
               <span className="gallery__stage">
-                <span className="gallery__replica" style={toReact(replicaCss(group.kind, item.styles))}>
-                  {item.label}
-                </span>
+                {item.shot ? (
+                  <img className="gallery__shot" src={item.shot.src} alt="" style={{ width: Math.min(item.shot.w, 240) }} />
+                ) : (
+                  <span className="gallery__replica" style={toReact(replicaCss(group.kind, item.styles))}>
+                    {item.label}
+                  </span>
+                )}
               </span>
               <span className="gallery__meta">
                 <span>
@@ -77,6 +82,37 @@ export function ComponentGallery() {
       <div className="stack">
         {groups.map((g) => (
           <GalleryGroupView key={g.kind} group={g} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ── Health by layer ─────────────────────────────────────────────────────
+
+const LEVEL_TONE = (score: number) => (score >= 80 ? 'success' : score >= 60 ? 'info' : score >= 35 ? 'warning' : 'danger') as 'success' | 'info' | 'warning' | 'danger';
+
+/** Foundations, Components and Accessibility: the three layers the report is organised by. */
+export function LayerCard() {
+  const controller = useController();
+  const { audit, dismissed } = useAuditState();
+  const name = controller.clientName();
+  const report = useMemo(() => (audit ? healthReport(audit, { clientName: name, dismissed }) : null), [audit, name, dismissed]);
+  if (!report) return null;
+  const shots = Object.keys(audit?.snapshot.evidence ?? {}).length;
+  return (
+    <Card
+      title={`Design system health: ${report.overall.score}/100`}
+      subtitle={`${report.overall.level}. ${shots ? `${shots} elements photographed for the report.` : 'No screenshots in this capture: the report redraws elements instead.'}`}
+    >
+      <div className="layer-grid">
+        {report.layers.map((l) => (
+          <div key={l.key} className="layer-tile">
+            <span className="muted small">{l.label}</span>
+            <strong>{l.score}</strong>
+            <Badge tone={LEVEL_TONE(l.score)}>{l.level}</Badge>
+            <span className="muted small">{l.summary}</span>
+          </div>
         ))}
       </div>
     </Card>
