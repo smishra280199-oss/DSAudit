@@ -1,11 +1,11 @@
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { runAudit } from '../src/audit';
-import { defaultClientName, EMPTY_BRANDING, type ClientReportOptions } from '../src/report/branding';
+import { bookingHref, defaultClientName, EMPTY_BRANDING, type ClientReportOptions } from '../src/report/branding';
 import { relativeTime, reportFileName } from '../src/report/format';
 import { auditToHtml } from '../src/report/html';
 import { auditToMarkdown } from '../src/report/markdown';
-import { auditToPdf } from '../src/report/pdf';
+import { auditToPdf, auditToTeaserPdf } from '../src/report/pdf';
 import { pdfSafe } from '../src/report/pdf/layout';
 import { DEFAULT_ASSUMPTIONS } from '../src/savings';
 import { makeSnapshot, times } from './helpers';
@@ -91,5 +91,30 @@ describe('report helpers', () => {
     expect(relativeTime('2026-10-29T11:58:00Z', now)).toBe('2m ago');
     expect(relativeTime('2026-10-29T09:00:00Z', now)).toBe('3h ago');
     expect(relativeTime('2026-10-28T09:00:00Z', now)).toBe('Yesterday');
+  });
+});
+
+describe('booking link', () => {
+  const audit = runAudit(messy, DEFAULT_ASSUMPTIONS);
+  const withBooking = { ...options, branding: { ...options.branding, bookingUrl: 'cal.com/layerone' } };
+
+  it('defaults to the Layer One booking page and can be cleared', () => {
+    expect(EMPTY_BRANDING.bookingUrl).toBe('https://cal.com/layerone');
+    expect(bookingHref('')).toBeNull();
+    expect(bookingHref('cal.com/layerone')).toBe('https://cal.com/layerone');
+  });
+
+  it('puts a clickable booking button in the PDF and the web report', async () => {
+    const pdf = await PDFDocument.load(await auditToPdf(audit, withBooking));
+    const links = pdf.getPages().flatMap((p) => (p.node.Annots()?.asArray() ?? []).map((a) => String(pdf.context.lookup(a))));
+    expect(links.some((l) => l.includes('https://cal.com/layerone'))).toBe(true);
+    expect(auditToHtml(audit, withBooking)).toContain('href="https://cal.com/layerone"');
+  });
+
+  it('keeps the short version short, and ends it with the booking button', async () => {
+    const full = await PDFDocument.load(await auditToPdf(audit, withBooking));
+    const short = await PDFDocument.load(await auditToTeaserPdf(audit, withBooking));
+    expect(short.getPageCount()).toBeLessThan(full.getPageCount());
+    expect(short.getPageCount()).toBeLessThanOrEqual(4);
   });
 });

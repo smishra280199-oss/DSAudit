@@ -10,7 +10,7 @@
 
 import type { Audit } from '../audit';
 import type { ExecutiveSummary } from '../insights';
-import type { ReportBranding } from '../report/branding';
+import { bookingHref, displayUrl, type ReportBranding } from '../report/branding';
 import { formatMoneyShort } from '../savings';
 import type { BusinessCase } from './index';
 
@@ -196,7 +196,10 @@ export function outreachKit({ audit, summary, business, branding, audience, reci
       `I've written it up with the exact values and selectors, ready to drop into tickets. Want a copy?`,
     ];
   }
-  const email = [...body.filter(Boolean), sign].join('\n\n');
+  // The booking link goes after the signature: the ask stays "can I send it?", the link is there for the keen.
+  const booking = bookingHref(branding.bookingUrl);
+  const ps = booking ? `P.S. If it's easier to walk through it together, grab 20 minutes here: ${displayUrl(booking)}` : '';
+  const email = [...body.filter(Boolean), sign, ps].filter(Boolean).join('\n\n');
 
   const linkedin = `${hi.replace(',', ' –')} I did an outside-in audit of ${client}'s UI. ${hook} I wrote up what it's costing and ${business.quickWins.length ? 'a couple of quick wins' : 'where to start'}. Want it?`;
 
@@ -205,7 +208,12 @@ export function outreachKit({ audit, summary, business, branding, audience, reci
     : second
       ? sentence(second.title)
       : `the product scores ${summary.score}/100 for consistency.`;
-  const followUp = [hi, `Quick follow-up on the ${client} audit. One more thing from it: ${lowerFirst(followUpFact)}`, `The report is ready whenever it's useful. Happy to send it, no strings.`, sign].join('\n\n');
+  const followUp = [
+    hi,
+    `Quick follow-up on the ${client} audit. One more thing from it: ${lowerFirst(followUpFact)}`,
+    booking ? `The report is ready whenever it's useful. Happy to send it, or walk you through it in 20 minutes: ${displayUrl(booking)}` : `The report is ready whenever it's useful. Happy to send it, no strings.`,
+    sign,
+  ].join('\n\n');
 
   return { subjects, email, linkedin, followUp };
 }

@@ -40,6 +40,7 @@ import { Stat, StatStrip } from '../components/Stat';
 import { copyText, download } from '../export';
 import { useNavigation, type ReportVersion } from '../navigation';
 import { useAuditState, useController } from '../use-audit';
+import { useReports } from '../use-reports';
 
 const CONFIDENCE_TONE: Record<ConfidenceLevel, Tone> = { high: 'success', medium: 'info', low: 'warning' };
 const CONFIDENCE_WHY: Record<ConfidenceLevel, string> = {
@@ -58,6 +59,7 @@ export function ReportView() {
   const controller = useController();
   const { audit, dismissed, branding } = useAuditState();
   const { reportVersion, openReport } = useNavigation();
+  const reports = useReports();
 
   const options = controller.reportOptions();
   const business = useMemo(() => (audit ? buildBusinessCase(audit, dismissed) : null), [audit, dismissed]);
@@ -72,6 +74,8 @@ export function ReportView() {
   const name = options.clientName;
   const downloads = executive
     ? [
+        { label: 'Short version for a first email (PDF)', icon: <DownloadIcon />, onSelect: () => void reports.downloadTeaser(audit) },
+        { label: 'Top finding as an image (PNG)', icon: <DownloadIcon />, onSelect: () => void reports.downloadCard(audit) },
         { label: 'One-pager (.html, printable to PDF)', icon: <DownloadIcon />, onSelect: () => download(impactFileName(name, 'html'), onePagerHtml(audit, options), 'text/html') },
         { label: 'Markdown (.md)', icon: <DownloadIcon />, onSelect: () => download(impactFileName(name, 'md'), executiveMarkdown(audit, options), 'text/markdown') },
       ]

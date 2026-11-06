@@ -12,9 +12,25 @@ export interface ReportBranding {
   website: string;
   /** A short personal note shown on the cover, e.g. why you are reaching out. */
   note: string;
+  /** Where prospects book a call (Cal.com, Calendly…); shown as a button on every report. */
+  bookingUrl: string;
 }
 
-export const EMPTY_BRANDING: ReportBranding = { agencyName: '', preparedBy: '', email: '', website: '', note: '' };
+export const DEFAULT_BOOKING_URL = 'https://cal.com/layerone';
+
+export const EMPTY_BRANDING: ReportBranding = { agencyName: '', preparedBy: '', email: '', website: '', note: '', bookingUrl: DEFAULT_BOOKING_URL };
+
+/** "https://cal.com/layerone" → "cal.com/layerone", for printing. */
+export function displayUrl(url: string): string {
+  return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
+
+/** A link a browser can open, even when typed without https://. */
+export function bookingHref(url: string): string | null {
+  const t = url.trim();
+  if (!t) return null;
+  return /^https?:\/\//.test(t) ? t : `https://${t}`;
+}
 
 /** "Acme Billing · Settings" → "Acme Billing"; falls back to the host. */
 export function defaultClientName(title: string, url: string): string {

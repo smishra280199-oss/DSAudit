@@ -21,7 +21,7 @@ import { tokenLabel, type ValueRow } from '../../insights/foundation-detail';
 import { formatMoney } from '../../savings';
 import { parseColor } from '../../shared/color';
 import type { EvidenceShot } from '../../shared/snapshot';
-import { hasContact, type ClientReportOptions } from '../branding';
+import { bookingHref, displayUrl, hasContact, type ClientReportOptions } from '../branding';
 import { formatDate } from '../format';
 import { Layout, type TextStyle } from './layout';
 import { COLORS, PAGE, TYPE } from './theme';
@@ -32,6 +32,8 @@ interface Context {
   options: ClientReportOptions;
   money: (n: number) => string;
   images: Map<string, PDFImage>;
+  /** The short version for a first email. */
+  short?: boolean;
 }
 
 const PAD = 14;
@@ -106,7 +108,8 @@ function card(l: Layout, content: (top: number) => number, gapAfter = 10): void 
 /** Each part opens on a new page with its layer score. */
 function partHeading(l: Layout, n: number, title: string, subtitle: string, layer?: { score: number; level: string }): void {
   l.addPage();
-  l.text(`${n} of 7`, l.left, l.y, { size: TYPE.small, color: COLORS.textSecondary });
+  // n = 0: no part number (the short version has no seven parts to count).
+  if (n > 0) l.text(`${n} of 7`, l.left, l.y, { size: TYPE.small, color: COLORS.textSecondary });
   if (layer) {
     const label = `${layer.score}/100 · ${layer.level}`;
     const w = l.textWidth(label, { size: 8 }) + 9;
@@ -282,7 +285,7 @@ function assessmentPage(l: Layout, ctx: Context): void {
 function priorityPage(l: Layout, ctx: Context): void {
   const { report } = ctx;
   if (report.top.length === 0) return;
-  partHeading(l, 3, 'Fix these three first', 'The three changes with the most effect for the effort, each with what is wrong, where it happens, why it matters and what to do.');
+  partHeading(l, ctx.short ? 0 : 3, 'Fix these three first', 'The three changes with the most effect for the effort, each with what is wrong, where it happens, why it matters and what to do.');
   report.top.forEach((f, i) => priorityFix(l, ctx, f, i + 1));
 }
 
@@ -462,6 +465,12 @@ function helpPart(l: Layout, ctx: Context): void {
     let h = l.text(branding.agencyName ? `How ${branding.agencyName} can help` : 'How we can help', x, top, bold(10.5), w) + 4;
     h += l.text('We help product teams turn findings like these into a working design system: a small set of named colours, text styles and spacing, and components that get reused rather than rebuilt. Happy to walk your team through this report, with no obligation.', x, top + h, small, w) + 6;
     if (hasContact(branding)) h += l.text([branding.preparedBy, branding.email, branding.website].filter(Boolean).join(' · '), x, top + h, bold(9), w) + 6;
+    const href = bookingHref(branding.bookingUrl);
+    if (href) {
+      l.button('Book a 20-minute walkthrough', href, x, top + h, COLORS.accent, COLORS.white);
+      l.text(displayUrl(href), x + l.textWidth('Book a 20-minute walkthrough', { size: 9, font: 'bold' }) + 34, top + h + 7, small, w);
+      h += 30;
+    }
     h += 4 + l.text(methodNote(ctx), x, top + h + 4, { ...tiny, color: COLORS.textTertiary }, w);
     return h;
   });
@@ -669,7 +678,23 @@ function footers(l: Layout, ctx: Context): void {
   });
 }
 
-export async function auditToPdf(audit: Audit, options: ClientReportOptions): Promise<Uint8Array> {
+/** "Book a 20-minute walkthrough": a clickable button to the booking page, when one is set. */
+function bookingCta(l: Layout, ctx: Context, headline: string): void {
+  const href = bookingHref(ctx.options.branding.bookingUrl);
+  if (!href) return;
+  card(l, (top) => {
+    const x = l.left + PAD;
+    const w = l.width - PAD * 2;
+    const label = 'Book a 20-minute walkthrough';
+    const bw = l.textWidth(label, { size: 9, font: 'bold' }) + 24;
+    let h = l.text(headline, x, top, bold(10.5), w - bw - 16);
+    h += 3 + l.text(`We’ll go through these findings on your own screens, and what fixing them would take. ${displayUrl(href)}`, x, top + h + 3, small, w - bw - 16);
+    l.button(label, href, x + w - bw, top + Math.max(0, h / 2 - 11.5), COLORS.accent, COLORS.white);
+    return Math.max(h, 23);
+  });
+}
+
+async function setup(audit: Audit, options: ClientReportOptions, title: string) {
   const pdf = await PDFDocument.create();
   const fonts = { regular: await pdf.embedFont(StandardFonts.Helvetica), bold: await pdf.embedFont(StandardFonts.HelveticaBold) };
   const report = healthReport(audit, { clientName: options.clientName, dismissed: options.dismissed });
@@ -680,22 +705,41 @@ export async function auditToPdf(audit: Audit, options: ClientReportOptions): Pr
     if (img) images.set(shot.src, img);
   }
   const ctx: Context = { audit, report, options, money: (n) => formatMoney(n, audit.assumptions.currency), images };
-
-  pdf.setTitle(`Design system health check: ${options.clientName}`);
+  pdf.setTitle(`${title}: ${options.clientName}`);
   pdf.setSubject(audit.snapshot.url);
   pdf.setAuthor(options.branding.agencyName || options.branding.preparedBy || 'System Audit');
   pdf.setCreator('System Audit (dslint)');
   pdf.setProducer('System Audit (dslint)');
   pdf.setCreationDate(new Date(audit.snapshot.capturedAt));
+  return { pdf, ctx, l: new Layout(pdf, fonts) };
+}
 
-  const l = new Layout(pdf, fonts);
+/** The full report: everything a design lead needs, about a dozen pages. */
+export async function auditToPdf(audit: Audit, options: ClientReportOptions): Promise<Uint8Array> {
+  const { pdf, ctx, l } = await setup(audit, options, 'Design system health check');
   await summaryPage(l, ctx);
   assessmentPage(l, ctx);
   priorityPage(l, ctx);
+  bookingCta(l, ctx, 'Want to see this on your own screens?');
   foundationsPart(l, ctx);
   componentsPart(l, ctx);
   accessibilityPart(l, ctx);
   helpPart(l, ctx);
+  footers(l, ctx);
+  return pdf.save();
+}
+
+/**
+ * The short version for a first email: the summary and the three priority
+ * fixes with their screenshots, then the booking button. The full report is
+ * what the walkthrough is for.
+ */
+export async function auditToTeaserPdf(audit: Audit, options: ClientReportOptions): Promise<Uint8Array> {
+  const { pdf, ctx, l } = await setup(audit, options, 'Design system health check (summary)');
+  ctx.short = true;
+  await summaryPage(l, ctx);
+  priorityPage(l, ctx);
+  bookingCta(l, ctx, 'This is the short version. The full report goes value by value through your colours, type, spacing and components.');
   footers(l, ctx);
   return pdf.save();
 }

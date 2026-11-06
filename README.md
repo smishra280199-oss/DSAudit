@@ -49,7 +49,7 @@ The one-time setup for both is in [docs/RELEASING.md](docs/RELEASING.md).
 8. **Overview** includes an **Accessibility check**: six automated WCAG checks (text contrast 1.4.3, visible focus 2.4.7, named controls 4.1.2, form labels 1.3.1, alt text 1.1.1 and tap-target size 2.5.8 from WCAG 2.2), each with pass/fail, who it affects and a link to the offending elements. It names what still needs a manual review, so it never reads as a certificate.
 9. **Inspect**: the detailed evidence for any element. Select any value to highlight it on the page.
 
-**Client report.** Set your agency, name, contact details and an optional personal note once under `⋯` → *Report details…*. The client name comes from the page and can be changed per site. Then press **Download PDF report**. The report answers five questions: what did we scan, what did we find, where exactly are the problems, what to fix first, and what a better design system could save. In order:
+**Client report.** Set your agency, name, contact details, booking link (defaults to https://cal.com/layerone) and an optional personal note once under `⋯` → *Report details…*. The booking link appears as a clickable “Book a 20-minute walkthrough” button in every report and as a P.S. in the outreach drafts. The client name comes from the page and can be changed per site. Then press **Download PDF report**. The report answers five questions: what did we scan, what did we find, where exactly are the problems, what to fix first, and what a better design system could save. In order:
 
 1. **Executive summary.** Design system health and the three layer scores (Foundations, Components, Accessibility); three estimate tiles (hours a design system would have saved, yearly cost of inconsistency, potential yearly savings), clearly marked as planning estimates; what we found; the three fixes to make first.
 2. **What we looked at.** Pages, elements, styling rules and screenshots; what each layer evaluates, in plain words, with its result; what's working well beside where the gaps are.
@@ -58,6 +58,8 @@ The one-time setup for both is in [docs/RELEASING.md](docs/RELEASING.md).
 5. **Components.** Buttons, icon buttons, tabs and menu items, links, inputs, badges, cards and headings, each style photographed and numbered; near-copies say exactly what differs and on which page.
 6. **Accessibility.** The WCAG checks with the failing elements photographed.
 7. **Where a design system helps.** What's working well, where the gaps are, opportunities to improve consistency, what a design system would change for the team, the starter token set, and how you can help.
+
+For a first email, use **Short version** (Overview, or the `⋯` menu): the summary and the three priority fixes with screenshots, ending with the booking button, in three pages. **Copy top finding** puts the strongest finding on the clipboard as an image (1200×675, with the real elements side by side) to paste straight into an email or LinkedIn message; it can also be downloaded as a PNG.
 
 The same content is available as a web report (HTML) or a Markdown summary for emails. Tune the cost model under *Savings assumptions…*.
 

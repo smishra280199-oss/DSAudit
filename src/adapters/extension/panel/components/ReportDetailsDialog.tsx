@@ -51,6 +51,14 @@ export function ReportDetailsDialog({ open, onClose }: { open: boolean; onClose:
           <TextField label="Your name" value={draft.preparedBy} placeholder="Alex Rivera" onChange={(preparedBy) => update({ preparedBy })} />
           <TextField label="Email" type="email" value={draft.email} placeholder="alex@studio.com" onChange={(email) => update({ email })} />
           <TextField label="Website" type="url" value={draft.website} placeholder="studio.com" onChange={(website) => update({ website })} />
+          <TextField
+            label="Booking link"
+            type="url"
+            value={draft.bookingUrl}
+            placeholder="https://cal.com/you"
+            onChange={(bookingUrl) => update({ bookingUrl })}
+            hint="Shown as a “Book a 20-minute walkthrough” button on every report and in outreach drafts."
+          />
         </div>
       </DialogSection>
       <DialogSection>

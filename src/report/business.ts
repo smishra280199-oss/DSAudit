@@ -16,7 +16,7 @@ import { starterSystem } from '../insights/starter-system';
 import { accessibilityReport } from '../insights/wcag';
 import type { AreaKey } from '../inference/types';
 import { formatMoney } from '../savings';
-import { hasContact, type ClientReportOptions } from './branding';
+import { bookingHref, hasContact, type ClientReportOptions } from './branding';
 import { escape, STYLES } from './html';
 import { formatDate, slug } from './format';
 
@@ -113,6 +113,8 @@ export function executiveMarkdown(audit: Audit, options: ClientReportOptions): s
   lines.push('', `_Estimates based on: ${assumptionsLine(a, money)}. Captured ${formatDate(audit.snapshot.capturedAt)} from ${b.pagesCaptured} ${b.pagesCaptured === 1 ? 'page' : 'pages'}._`);
   const { branding } = options;
   if (hasContact(branding)) lines.push('', `Prepared by ${[branding.preparedBy, branding.agencyName].filter(Boolean).join(', ')}${branding.email ? ` · ${branding.email}` : ''}${branding.website ? ` · ${branding.website}` : ''}`);
+  const booking = bookingHref(branding.bookingUrl);
+  if (booking) lines.push('', `Book a 20-minute walkthrough: ${booking}`);
   return lines.join('\n');
 }
 

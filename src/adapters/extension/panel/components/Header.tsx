@@ -40,6 +40,9 @@ export function Header() {
             label: 'Client report',
             items: [
               { label: 'Download PDF report', icon: <DownloadIcon />, onSelect: () => void reports.downloadPdf(audit) },
+              { label: 'Download short version (PDF, for a first email)', icon: <DownloadIcon />, onSelect: () => void reports.downloadTeaser(audit) },
+              { label: 'Copy top finding as an image', icon: <CopyIcon />, onSelect: () => void reports.copyCard(audit) },
+              { label: 'Download top finding as an image (PNG)', icon: <DownloadIcon />, onSelect: () => void reports.downloadCard(audit) },
               { label: 'Download web report (HTML)', icon: <DownloadIcon />, onSelect: () => reports.downloadHtml(audit) },
               { label: 'Copy summary (Markdown)', icon: <CopyIcon />, onSelect: () => reports.copySummary(audit) },
               { label: 'Download raw data (JSON)', icon: <DownloadIcon />, onSelect: () => reports.downloadJson(audit) },

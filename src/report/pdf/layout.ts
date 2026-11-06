@@ -5,7 +5,7 @@
  * measured from the top of the page, as in CSS.
  */
 
-import type { PDFDocument, PDFFont, PDFImage, PDFPage, RGB } from 'pdf-lib';
+import { PDFString, type PDFDocument, type PDFFont, type PDFImage, type PDFPage, type RGB } from 'pdf-lib';
 import { COLORS, PAGE } from './theme';
 
 export interface Fonts {
@@ -191,6 +191,31 @@ export class Layout {
   image(img: PDFImage, x: number, top: number, width: number, height: number): void {
     if (this.dry) return;
     this.page.drawImage(img, { x, y: PAGE.height - top - height, width, height });
+  }
+
+  /** Makes a rectangle clickable: opens `url` in the reader's browser. */
+  link(url: string, x: number, top: number, width: number, height: number): void {
+    if (this.dry) return;
+    const y = PAGE.height - top - height;
+    const annot = this.pdf.context.obj({
+      Type: 'Annot',
+      Subtype: 'Link',
+      Rect: [x, y, x + width, y + height],
+      Border: [0, 0, 0],
+      A: { Type: 'Action', S: 'URI', URI: PDFString.of(url) },
+    });
+    this.page.node.addAnnot(this.pdf.context.register(annot));
+  }
+
+  /** A filled, clickable call-to-action; returns its width. */
+  button(label: string, url: string, x: number, top: number, fill: RGB, color: RGB, size = 9): number {
+    const style: TextStyle = { size, font: 'bold', color };
+    const w = this.textWidth(label, style) + 24;
+    const h = size + 14;
+    this.roundedRect(x, top, w, h, h / 2, fill);
+    this.text(label, x + 12, top + 7, style, Number.MAX_SAFE_INTEGER);
+    this.link(url, x, top, w, h);
+    return w;
   }
 
   /** A colour sample. */

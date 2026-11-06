@@ -92,6 +92,12 @@ export function OverviewView() {
           >
             Download PDF report
           </Button>
+          <Button size="sm" disabled={reports.generating} onClick={() => void reports.downloadTeaser(audit)}>
+            Short version
+          </Button>
+          <Button size="sm" variant="ghost" disabled={reports.generating} onClick={() => void reports.copyCard(audit)}>
+            Copy top finding
+          </Button>
           <Button variant="ghost" size="sm" onClick={openReportDetails}>
             Report details
           </Button>

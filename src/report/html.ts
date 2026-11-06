@@ -11,7 +11,7 @@ import { healthReport, type HealthFinding, type Shot } from '../insights/health'
 import { tokenLabel, type ValueRow } from '../insights/foundation-detail';
 import { formatMoney } from '../savings';
 import type { EvidenceShot } from '../shared/snapshot';
-import { hasContact, type ClientReportOptions } from './branding';
+import { bookingHref, displayUrl, hasContact, type ClientReportOptions } from './branding';
 import { formatDate } from './format';
 
 export const escape = (s: string) =>
@@ -145,6 +145,12 @@ export function auditToHtml(audit: Audit, options: ClientReportOptions): string 
   const m = r.money;
   const layer = (k: string) => r.layers.find((x) => x.key === k)!;
   const contact = [branding.preparedBy, branding.email, branding.website].filter(Boolean).map(escape).join(' · ');
+  const href = bookingHref(branding.bookingUrl);
+  const cta = (headline: string) =>
+    href
+      ? `<section class="card" style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap"><div><h3>${escape(headline)}</h3><p class="small muted">We’ll go through these findings on your own screens, and what fixing them would take.</p></div>
+<a href="${escape(href)}" style="background:#e600da;color:#fff;font-weight:600;padding:9px 16px;border-radius:999px;text-decoration:none;white-space:nowrap">Book a 20-minute walkthrough</a></section>`
+      : '';
   const list = (items: string[], dotClass: string) => `<ul style="list-style:none;padding:0;margin:8px 0 0">${items.map((x) => `<li class="small" style="margin:5px 0"><span class="dot ${dotClass}"></span> ${escape(x)}</li>`).join('')}</ul>`;
   const block = (label: string, text: string) => `<tr><td class="small muted" style="width:110px"><b>${escape(label)}</b></td><td class="small">${escape(text)}</td></tr>`;
 
@@ -196,6 +202,8 @@ ${r.top
     : ''
 }
 
+${cta('Want to see this on your own screens?')}
+
 ${PART(4, 'Foundations', `Colours, text styles, spacing and shapes, value by value, with real examples from your pages and whether each maps to a design token. Rows marked on the left need attention. ${layer('foundations').summary}`, layer('foundations'))}
 <p class="small muted">Token column: “Token” means the value already comes from a design token; “Typed by hand” means a token exists but this place types the raw value; “No token” suggests a semantic token (its job) → a primitive token (the raw step).</p>
 ${d.colours.length ? `<h3 style="margin-top:14px">Colour</h3><p class="small muted">${f.colours.total} colours in use${f.colours.copies ? `, ${f.colours.copies} of them near-copies` : ''}.</p>${valueTableHtml(d.colours, (x) => `<span class="sw"><i style="background:${escape(x.value)}"></i><b style="color:var(--text)">${escape(x.value)}</b></span><div class="small faint">${escape(x.role ?? '')}${(x.alpha ?? 1) < 1 ? ` · ${Math.round((x.alpha ?? 1) * 100)}% opacity` : ''}</div>`)}` : ''}
@@ -224,7 +232,7 @@ ${PART(7, 'Where a design system helps', 'What is already working, where the gap
     .map((t) => `<div class="sw2" style="width:84px"><i style="background:${escape(t.value)}"></i><b style="color:var(--text)">${escape(t.name.replace('color-', ''))}</b><br>${escape(t.value)}</div>`)
     .join('')}</div></section>
 <section class="card"><h3>How ${branding.agencyName ? escape(branding.agencyName) : 'we'} can help</h3><p class="muted" style="margin-top:4px">We help product teams turn findings like these into a working design system: a small set of named colours, text styles and spacing, and components that get reused rather than rebuilt. Happy to walk your team through this report, with no obligation.</p>
-${hasContact(branding) ? `<p style="margin-top:8px"><b>${contact}</b></p>` : ''}</section>
+${hasContact(branding) ? `<p style="margin-top:8px"><b>${contact}</b></p>` : ''}${href ? `<p style="margin-top:10px"><a href="${escape(href)}" style="background:#e600da;color:#fff;font-weight:600;padding:8px 14px;border-radius:999px;text-decoration:none">Book a 20-minute walkthrough</a> <span class="small muted">${escape(displayUrl(href))}</span></p>` : ''}</section>
 <p class="small faint">How we worked this out: we opened ${r.pages.length === 1 ? 'your page' : `${r.pages.length} of your pages`} in a normal browser and measured ${snapshot.rendered.elements.length.toLocaleString('en-US')} visible elements and ${snapshot.authored.declarations.length.toLocaleString('en-US')} styling rules; every picture is a screenshot of your live pages. Money figures are planning estimates for a team of about ${a.contributors} at ${money(a.hourlyRate)} an hour, not invoices. Pages: ${escape(r.pages.map((p) => p.url).join(', '))}.</p>
 <footer>${escape(r.clientName)} · Design system health check</footer>
 </main></body></html>`;

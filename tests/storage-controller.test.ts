@@ -125,7 +125,7 @@ describe('report details', () => {
     const { controller } = await setup();
     await controller.capture();
     expect(controller.clientName()).toBe('Example');
-    const branding = { agencyName: 'Northbeam', preparedBy: 'Sam', email: '', website: '', note: '' };
+    const branding = { agencyName: 'Northbeam', preparedBy: 'Sam', email: '', website: '', note: '', bookingUrl: 'https://cal.com/northbeam' };
     await controller.updateReportDetails(branding, 'Acme Inc.');
     expect(controller.reportOptions()).toMatchObject({ branding, clientName: 'Acme Inc.' });
 
