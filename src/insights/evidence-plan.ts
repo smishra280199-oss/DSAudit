@@ -7,6 +7,8 @@
  */
 
 import type { Audit } from '../audit';
+import { foundationDetail, foundationEvidence } from './foundation-detail';
+import { starterSystem } from './starter-system';
 
 const PER_KIND = 12;
 
@@ -37,7 +39,10 @@ export function planEvidence(audit: Audit): string[] {
   const sizes = analysis.foundations.typography.groups.find((g) => g.key === 'font-size');
   add((sizes?.values ?? []).map((v) => v.selectors[0]), 14);
 
+  // Examples for the foundation tables: where each colour, text style, spacing value and radius is used.
+  add(foundationEvidence(foundationDetail(audit, starterSystem(audit))), 120);
+
   // Page order: the elements' captured positions.
   const top = new Map(snapshot.rendered.elements.map((e) => [e.selector, e.rect.y]));
-  return [...new Set(picks)].sort((x, y) => (top.get(x) ?? 0) - (top.get(y) ?? 0)).slice(0, 140);
+  return [...new Set(picks)].slice(0, 220).sort((x, y) => (top.get(x) ?? 0) - (top.get(y) ?? 0));
 }

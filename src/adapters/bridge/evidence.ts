@@ -21,7 +21,7 @@ export interface ShotDriver {
 }
 
 /** Keeps a capture to a sensible length: each frame is one screenshot. */
-const MAX_FRAMES = 45;
+const MAX_FRAMES = 70;
 const MARGIN = 4;
 const MAX_CROP_WIDTH = 560;
 
@@ -124,6 +124,7 @@ export async function collectEvidence(
   const shots: Record<string, EvidenceShot> = {};
   let remaining = [...new Set(selectors)];
   const total = remaining.length;
+  let failures = 0;
   try {
     for (let frames = 0; remaining.length > 0 && frames < MAX_FRAMES; frames += 1) {
       const focus = remaining[0]!;
@@ -135,9 +136,15 @@ export async function collectEvidence(
       }
       const image = await driver.screenshot();
       await driver.endFrame();
-      if (!image) break;
-      Object.assign(shots, await cropFrame(image, frame));
-      remaining = remaining.filter((s) => !(s in shots) && !(s === focus && frame.focusFailed));
+      if (!image) {
+        // Skip this element rather than giving up on every other one.
+        failures += 1;
+        if (failures >= 4) break;
+        remaining = remaining.slice(1);
+        continue;
+      }
+      Object.assign(shots, await cropFrame(image, frame).catch(() => ({})));
+      remaining = remaining.filter((s) => !(s in shots) && s !== focus);
       onProgress?.(total - remaining.length, total);
     }
   } finally {

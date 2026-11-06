@@ -95,13 +95,32 @@ export class ChromeBridge implements Bridge {
     return { page, hostAccess };
   }
 
-  async captureScreenshot(tab: TabInfo): Promise<string | null> {
+  captureScreenshot(tab: TabInfo): Promise<string | null> {
+    return this.screenshot(tab, 'jpeg');
+  }
+
+  private lastShot = 0;
+
+  /**
+   * Every screenshot goes through here. Chrome allows about two a second
+   * (MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND) and rejects the rest, so calls
+   * are spaced out and a rejected one is retried after a pause.
+   */
+  private async screenshot(tab: TabInfo, format: 'png' | 'jpeg'): Promise<string | null> {
     if (tab.windowId === undefined) return null;
-    try {
-      return await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 70 });
-    } catch {
-      return null;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const wait = this.lastShot + 650 + attempt * 500 - Date.now();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      this.lastShot = Date.now();
+      try {
+        return format === 'png'
+          ? await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' })
+          : await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 70 });
+      } catch {
+        // Over the rate limit, or the tab is mid-repaint: wait and try again.
+      }
     }
+    return null;
   }
 
   highlight(tab: TabInfo, selectors: string[], label?: string) {
@@ -120,8 +139,6 @@ export class ChromeBridge implements Bridge {
     await this.run(tab, (value: boolean) => (window as unknown as CaptureGlobal).__dslintCapture.setInspectMode(value), [on]);
   }
 
-  private lastShot = 0;
-
   collectEvidence(tab: TabInfo, selectors: string[], onProgress?: (done: number, total: number) => void) {
     const api = () => (window as unknown as CaptureGlobal).__dslintCapture;
     return collectEvidence(
@@ -129,18 +146,7 @@ export class ChromeBridge implements Bridge {
         frame: (s, focus) => this.run(tab, (sel: string[], f: string) => api().frame(sel, f), [s, focus]),
         endFrame: () => this.run(tab, () => api().endFrame(), []),
         finish: () => this.run(tab, () => api().finishShots(), []),
-        screenshot: async () => {
-          if (tab.windowId === undefined) return null;
-          // Chrome allows about two screenshots a second.
-          const wait = this.lastShot + 600 - Date.now();
-          if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-          this.lastShot = Date.now();
-          try {
-            return await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
-          } catch {
-            return null;
-          }
-        },
+        screenshot: () => this.screenshot(tab, 'png'),
       },
       selectors,
       onProgress,

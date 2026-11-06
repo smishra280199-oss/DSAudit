@@ -79,6 +79,8 @@ const TAG_NAMES: Record<string, string> = { a: 'link', h1: 'heading', h2: 'headi
 /** Example names for a component's intentional styles, so suggestions fit the component. */
 const VARIANT_EXAMPLES: Record<ComponentAnalysis['kind'], string> = {
   button: 'primary, secondary and danger',
+  'icon-button': 'default and subtle',
+  tab: 'default and selected',
   input: 'default and error',
   link: 'default and subtle',
   heading: 'page title, section title and card title',
