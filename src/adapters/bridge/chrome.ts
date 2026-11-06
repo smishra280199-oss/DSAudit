@@ -140,12 +140,13 @@ export class ChromeBridge implements Bridge {
   }
 
   collectEvidence(tab: TabInfo, selectors: string[], onProgress?: (done: number, total: number) => void) {
-    const api = () => (window as unknown as CaptureGlobal).__dslintCapture;
+    // Functions passed to executeScript are serialised and run in the page: they must not
+    // refer to anything outside themselves (a helper here would be undefined there).
     return collectEvidence(
       {
-        frame: (s, focus) => this.run(tab, (sel: string[], f: string) => api().frame(sel, f), [s, focus]),
-        endFrame: () => this.run(tab, () => api().endFrame(), []),
-        finish: () => this.run(tab, () => api().finishShots(), []),
+        frame: (s, focus) => this.run(tab, (sel: string[], f: string) => (window as unknown as CaptureGlobal).__dslintCapture.frame(sel, f), [s, focus]),
+        endFrame: () => this.run(tab, () => (window as unknown as CaptureGlobal).__dslintCapture.endFrame(), []),
+        finish: () => this.run(tab, () => (window as unknown as CaptureGlobal).__dslintCapture.finishShots(), []),
         screenshot: () => this.screenshot(tab, 'png'),
       },
       selectors,

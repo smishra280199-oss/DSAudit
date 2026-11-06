@@ -217,7 +217,7 @@ function assessmentPage(l: Layout, ctx: Context): void {
     { v: String(s.pages), l: s.pages === 1 ? 'page scanned' : 'pages scanned' },
     { v: s.elements.toLocaleString('en-US'), l: 'visible elements measured' },
     { v: s.rules.toLocaleString('en-US'), l: 'styling rules read' },
-    { v: String(s.screenshots), l: 'elements photographed as evidence' },
+    { v: s.planned > s.screenshots ? `${s.screenshots} of ${s.planned}` : String(s.screenshots), l: 'elements photographed as evidence' },
   ];
   const gap = 8;
   const w = (l.width - gap * 3) / 4;

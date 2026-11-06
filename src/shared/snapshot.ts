@@ -218,6 +218,8 @@ export interface PageSnapshot {
    * capture by scrolling the page; absent when screenshots weren't possible.
    */
   evidence?: Record<string, EvidenceShot>;
+  /** How the screenshots went: how many elements we meant to photograph, how many we got, and why not, if it failed. */
+  evidenceReport?: { planned: number; taken: number; error?: string };
   rendered: RenderedLayer;
   authored: AuthoredLayer;
 }

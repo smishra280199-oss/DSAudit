@@ -89,7 +89,7 @@ export interface HealthReport {
   /** Every colour, text style, spacing value and radius, with examples and token status. */
   detail: FoundationDetail;
   /** What we scanned and how. */
-  scan: { pages: number; elements: number; rules: number; screenshots: number; date: string; contributors: number; hourlyRate: number };
+  scan: { pages: number; elements: number; rules: number; screenshots: number; planned: number; date: string; contributors: number; hourlyRate: number };
   /** Three or four plain sentences: the headline findings. */
   keyFindings: string[];
   working: string[];
@@ -366,6 +366,7 @@ export function healthReport(audit: Audit, options: { clientName: string; dismis
       elements: snapshot.rendered.elements.length,
       rules: snapshot.authored.declarations.length,
       screenshots: Object.keys(evidence).length,
+      planned: snapshot.evidenceReport?.planned ?? Object.keys(evidence).length,
       date: snapshot.capturedAt,
       contributors: audit.assumptions.contributors,
       hourlyRate: audit.assumptions.hourlyRate,
