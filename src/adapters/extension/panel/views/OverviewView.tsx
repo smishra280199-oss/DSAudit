@@ -6,13 +6,14 @@
 
 import { buildBusinessCase, consistencyLevel } from '../../../../business';
 import { summarise, STATUS_LABELS, type HealthStatus, type PainPoint } from '../../../../insights';
-import type { ConfidenceLevel, Severity } from '../../../../inference/types';
+import type { ConfidenceLevel, Severity, StructureAnalysis } from '../../../../inference/types';
 import { formatMoney, formatMoneyShort } from '../../../../savings';
 import { Badge, Button, Card, ChevronRightIcon, EyeOffIcon, FileIcon, InfoIcon, List, Menu, PagesIcon, Row, Spinner, TargetIcon, UndoIcon, type Tone } from '../ui';
 import { Stat, StatStrip } from '../components/Stat';
 import { useNavigation } from '../navigation';
 import { ImpactEffortMatrix } from './OpportunitiesView';
 import { AccessibilityCard, LayerCard } from './Showcase';
+import { TechnologyCard } from './TechnologyCard';
 import { useAuditState, useController } from '../use-audit';
 import { useReports } from '../use-reports';
 
@@ -24,6 +25,20 @@ const PRIORITY: Record<Severity, { label: string; tone: Tone }> = {
   medium: { label: 'Worth fixing', tone: 'warning' },
   low: { label: 'Nice to have', tone: 'neutral' },
 };
+
+const list = (items: { label: string; count: number }[]) => items.map((i) => `${i.count.toLocaleString()} ${i.label}`).join(', ');
+
+/** What the audit recognised and what it set aside, so every count can be explained. */
+function structureLines(s: StructureAnalysis): string[] {
+  const lines = [`Recognised: ${list(s.roles.filter((r) => r.key !== 'structural').slice(0, 5))}, plus ${(s.roles.find((r) => r.key === 'structural')?.count ?? 0).toLocaleString()} layout wrappers.`];
+  if (s.excluded.length) lines.push(`Left out as not part of the product’s own interface: ${list(s.excluded)}.`);
+  if (s.merged.length) lines.push(`Counted once, not twice: ${list(s.merged)}.`);
+  if (s.customControls.length) {
+    const n = s.customControls.length;
+    lines.push(`${n} clickable ${n === 1 ? 'element is a div or span' : 'elements are divs or spans'} without a button or link role, so screen readers can’t tell they are controls.`);
+  }
+  return lines;
+}
 
 export function OverviewView() {
   const controller = useController();
@@ -212,6 +227,8 @@ export function OverviewView() {
 
       <AccessibilityCard />
 
+      <TechnologyCard />
+
       <Card title="About this capture" action={<Badge tone={CONFIDENCE_TONE[analysis.confidence.level]}>{CONFIDENCE_LABEL[analysis.confidence.level]}</Badge>}>
         <ul className="reasons">
           <li>
@@ -219,6 +236,12 @@ export function OverviewView() {
             {snapshot.rendered.elements.length.toLocaleString()} elements and {snapshot.authored.declarations.length.toLocaleString()} styling rules read
             {snapshot.pages ? ` across ${snapshot.pages.length} pages` : ' from one page'}.
           </li>
+          {structureLines(analysis.structure).map((line) => (
+            <li key={line}>
+              <InfoIcon size={14} />
+              {line}
+            </li>
+          ))}
           {analysis.confidence.reasons.map((reason) => (
             <li key={reason}>
               <InfoIcon size={14} />
@@ -226,11 +249,18 @@ export function OverviewView() {
             </li>
           ))}
         </ul>
-        {!hostAccess && (
-          <Button size="sm" onClick={() => void controller.requestHostAccess()}>
-            Allow access to all sites
-          </Button>
-        )}
+        <div className="overview-actions">
+          {analysis.structure.customControls.length > 0 && (
+            <Button size="sm" variant="ghost" icon={<TargetIcon size={14} />} onClick={() => void controller.highlight(analysis.structure.customControls, 'Clickable without a role')}>
+              Show clickable elements without a role
+            </Button>
+          )}
+          {!hostAccess && (
+            <Button size="sm" onClick={() => void controller.requestHostAccess()}>
+              Allow access to all sites
+            </Button>
+          )}
+        </div>
       </Card>
     </div>
   );

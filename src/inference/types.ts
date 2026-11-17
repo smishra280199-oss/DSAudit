@@ -9,6 +9,7 @@
 
 import type { ContrastResult } from '../shared/contrast';
 import type { ClassNamingStats, DeclarationCategory, InteractionCoverage, StyleKey } from '../shared/snapshot';
+import type { TechnologyAnalysis } from './technology';
 
 /** Scored areas. Each needs a weight in AREA_WEIGHTS (scoring/index.ts). */
 export type AreaKey =
@@ -213,6 +214,22 @@ export interface Opportunity {
   values?: string[];
 }
 
+/** What the audit recognised on the page and what it left out, with reasons. See structure.ts. */
+export interface StructureAnalysis {
+  /** Elements recorded by the capture. */
+  total: number;
+  /** Elements the design-system analysis counts (total minus excluded). */
+  counted: number;
+  /** Whether geometry was available (it isn't under jsdom); size and position rules need it. */
+  layout: boolean;
+  roles: { key: string; label: string; count: number }[];
+  excluded: { key: string; label: string; count: number }[];
+  /** Repeats folded into the element they repeat, so one control is one finding. */
+  merged: { key: string; label: string; count: number }[];
+  /** Clickable divs and spans without a role, by selector (up to 40). */
+  customControls: string[];
+}
+
 export interface AuditAnalysis {
   foundations: Record<FoundationKey, FoundationAnalysis>;
   components: ComponentAnalysis[];
@@ -222,4 +239,6 @@ export interface AuditAnalysis {
   naming: ClassNamingStats;
   confidence: Confidence;
   opportunities: Opportunity[];
+  structure: StructureAnalysis;
+  technology: TechnologyAnalysis;
 }

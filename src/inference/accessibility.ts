@@ -5,6 +5,7 @@
 
 import { evaluateContrast, type BackdropLayer } from '../shared/contrast';
 import { isVisuallyHidden, px, type ElementView } from './elements';
+import { isCustomControl } from './structure';
 import { parseSelector } from '../shared/page-scope';
 import type { AccessibilityAnalysis, ContrastIssue } from './types';
 
@@ -19,17 +20,26 @@ function backdrop(views: ElementView[], index: number): BackdropLayer[] {
   return layers;
 }
 
-/** WCAG 1.4.3 exempts inactive controls; text nobody can see can't fail contrast. */
+/**
+ * WCAG 1.4.3 exempts inactive controls; text nobody can see can't fail
+ * contrast. `exempt` is inherited from disabled and aria-hidden ancestors by
+ * the structure pass, so this no longer walks every element's ancestors.
+ */
 function exemptFromContrast(views: ElementView[], index: number): boolean {
-  for (let i = index; i >= 0; i = views[i]!.el.parent) {
-    const { attrs } = views[i]!.el;
-    if (attrs.disabled !== undefined || attrs['aria-disabled'] === 'true' || attrs['aria-hidden'] === 'true') return true;
-  }
-  return isVisuallyHidden(views[index]!);
+  const view = views[index]!;
+  return view.exempt || view.excluded === 'zero-size' || isVisuallyHidden(view);
 }
 
-function isControl({ el }: ElementView): boolean {
-  return el.tag === 'button' || el.attrs.role === 'button' || (el.tag === 'a' && el.attrs.href !== undefined);
+/**
+ * Controls that need an accessible name: buttons, links, and clickable divs
+ * without a role (sighted users operate them, so they need a name too).
+ * Hidden from assistive technology, collapsed, or the inner half of a nested
+ * pair: nothing to name, or named by the outer control.
+ */
+function needsName(view: ElementView): boolean {
+  const { el } = view;
+  const control = el.tag === 'button' || el.attrs.role === 'button' || (el.tag === 'a' && el.attrs.href !== undefined) || isCustomControl(view);
+  return control && !view.exempt && view.excluded !== 'zero-size' && view.merged !== 'nested-control';
 }
 
 const TARGET_MIN = 24;
@@ -136,7 +146,7 @@ export function analyseAccessibility(views: ElementView[], pixelBackdrops?: Reco
     failures.push({ ...result, selector: view.el.selector, text: view.el.text, verified: Boolean(measured) });
   }
 
-  const controls = views.filter(isControl);
+  const controls = views.filter(needsName);
   const unnamed = controls
     .filter((v) => !v.subtreeHasText && !v.subtreeHasLabel)
     .map((v) => ({ selector: v.el.selector, tag: v.el.tag }));

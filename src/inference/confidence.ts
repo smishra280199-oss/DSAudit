@@ -32,6 +32,10 @@ export function assessConfidence(snapshot: PageSnapshot): Confidence {
     reasons.push('Very large CSS: only the first 25,000 design declarations were recorded.');
     penalty += 1;
   }
+  if (snapshot.settle && !snapshot.settle.settled) {
+    reasons.push('The page was still changing when it was read (live content or animations), so some elements may be missing or caught mid-transition.');
+    penalty += 1;
+  }
   if (rendered.elements.length < 30) {
     reasons.push('Very few elements were visible, so scores rest on little evidence.');
     penalty += 1;

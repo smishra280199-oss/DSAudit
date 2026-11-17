@@ -58,7 +58,7 @@ async function copyStatic() {
 
   await mkdir(resolve(root, 'preview-dist'), { recursive: true });
   await cp(resolve(root, 'public/preview.html'), resolve(root, 'preview-dist/index.html'));
-  for (const page of ['demo-page.html', 'demo-pricing.html']) {
+  for (const page of ['demo-page.html', 'demo-pricing.html', 'dynamic-page.html']) {
     await cp(resolve(root, 'fixtures', page), resolve(root, 'preview-dist', page));
   }
 }

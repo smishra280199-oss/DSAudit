@@ -1,0 +1,118 @@
+<!doctype html>
+<!--
+  A deliberately tricky page for the audit engine. Every block is something
+  real sites do that a naive DOM scan miscounts; the comment above each one
+  says what the right answer is. Used by the preview harness and to validate
+  the engine in a real browser.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dynamic page — Acme</title>
+<style>
+  :root { --brand: #5b21b6; --text: #171717; --muted: #6b6b6b; --surface: #ffffff; --canvas: #f6f6f6; }
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: var(--text); background: var(--canvas); }
+  .skip { position: absolute; left: -9999px; top: 0; }
+  .skip:focus { left: 8px; }
+  header { display: flex; gap: 24px; align-items: center; padding: 16px 32px; background: var(--surface); }
+  header a { color: var(--text); text-decoration: none; }
+  .drawer { position: fixed; top: 0; left: 0; width: 280px; height: 100vh; background: var(--surface); transform: translateX(-100%); }
+  .drawer a { display: block; padding: 12px 16px; color: var(--text); }
+  .btn { display: inline-flex; align-items: center; height: 40px; padding: 0 18px; border: 0; border-radius: 8px; background: var(--brand); color: #fff; font: 600 14px/1 system-ui; cursor: pointer; }
+  .btn-ghost { background: transparent; color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); }
+  .looks-like-button { display: inline-flex; align-items: center; height: 40px; padding: 0 18px; border-radius: 8px; background: #e11d48; color: #fff; }
+  .hero { padding: 64px 32px; }
+  .hero a.wrap { display: inline-block; }
+  .marquee { display: flex; overflow: hidden; gap: 32px; padding: 16px 32px; white-space: nowrap; }
+  .marquee > div { display: flex; gap: 32px; flex: none; }
+  .marquee a { color: var(--muted); }
+  .menu { position: relative; display: inline-block; }
+  .menu-list { visibility: hidden; position: absolute; top: 100%; left: 0; padding: 8px; background: var(--surface); border-radius: 8px; box-shadow: 0 4px 16px #0002; }
+  .menu-list .pinned { visibility: visible; }
+  .grid-panel { max-width: 960px; margin: 32px auto; padding: 24px; background: #fafafa; border: 1px solid #ebebeb; border-radius: 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: var(--surface); border-radius: 12px; box-shadow: 0 1px 3px #0002; }
+  .card-inner { background: var(--surface); border-radius: 12px; padding: 16px; min-height: 160px; }
+  a.post { display: block; color: inherit; text-decoration: none; }
+  a.post img { display: block; width: 100%; height: 120px; object-fit: cover; border-radius: 12px 12px 0 0; background: #ddd; }
+  a.post h3 { margin: 12px 16px 16px; }
+  .clicky { display: inline-flex; align-items: center; height: 40px; padding: 0 18px; border-radius: 8px; background: #0f766e; color: #fff; cursor: pointer; }
+  .accordion-panel { height: 0; overflow: hidden; background: #ff0000; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .spacer { height: 1600px; }
+  #onetrust-consent-sdk { position: fixed; bottom: 0; left: 0; right: 0; padding: 16px 32px; background: #1f2937; color: #fff; display: flex; gap: 12px; align-items: center; }
+  #onetrust-consent-sdk button { height: 36px; padding: 0 14px; border: 0; border-radius: 4px; background: #16a34a; color: #fff; }
+</style>
+</head>
+<body>
+  <!-- Off-screen until focused: a skip link, not part of the visual design. -->
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header>
+    <strong>Acme</strong>
+    <nav><a href="/">Home</a> <a href="/pricing">Pricing</a> <a href="/docs">Docs</a></nav>
+    <!-- A closed dropdown: hidden, except the one item that overrides visibility. -->
+    <div class="menu"><a href="/more">More</a>
+      <div class="menu-list"><a href="/careers">Careers</a> <a class="pinned" href="/status">Status</a></div>
+    </div>
+  </header>
+
+  <!-- The mobile drawer: the same links again, translated off-screen. Not a second navigation style. -->
+  <nav class="drawer" aria-label="Mobile"><a href="/">Home</a><a href="/pricing">Pricing</a><a href="/docs">Docs</a></nav>
+
+  <main id="main">
+    <section class="hero">
+      <h1>Ship faster</h1>
+      <span class="sr-only">Screen-reader only note</span>
+      <!-- A button inside a link of the same size: one control. -->
+      <a class="wrap" href="/signup"><button class="btn">Get started</button></a>
+      <!-- The span paints the button: one control, not a badge. -->
+      <button class="btn-ghost btn" style="padding:0;background:transparent;box-shadow:none"><span class="btn btn-ghost">Book a demo</span></button>
+      <!-- Looks like a button, does nothing: decoration. -->
+      <a class="looks-like-button">Limited offer</a>
+      <!-- Works with a mouse, no role: a button for sighted users, invisible to screen readers. -->
+      <div class="clicky" tabindex="0" onclick="void 0">Try it</div>
+    </section>
+
+    <!-- A logo marquee: the second strip is an aria-hidden clone of the first. -->
+    <div class="marquee">
+      <div><a href="/c/1">Northwind</a><a href="/c/2">Globex</a><a href="/c/3">Initech</a></div>
+      <div aria-hidden="true"><a href="/c/1" tabindex="-1">Northwind</a><a href="/c/2" tabindex="-1">Globex</a><a href="/c/3" tabindex="-1">Initech</a></div>
+    </div>
+
+    <!-- A rounded panel holding cards (a surface style of its own, counted once); each card has a same-size inner wrapper that is the same card. -->
+    <section class="grid-panel">
+      <article class="card"><div class="card-inner"><h3>Fast</h3><p>Deploys in seconds.</p><button class="btn">Learn more</button></div></article>
+      <article class="card"><div class="card-inner"><h3>Safe</h3><p>Rollbacks built in.</p><button class="btn">Learn more</button></div></article>
+      <!-- A clickable card: a link around an image and a heading. -->
+      <a class="post card" href="/blog/1"><img alt="Release notes cover" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="><h3>Release notes</h3></a>
+    </section>
+
+    <!-- Collapsed: its red background is never seen. -->
+    <div class="accordion-panel"><p>Hidden answer</p></div>
+
+    <!-- Rendered by script after load, like a client-side app. -->
+    <section id="late"></section>
+
+    <div class="spacer"></div>
+
+    <!-- Rendered only once scrolled into view (lazy section). -->
+    <section id="lazy" style="min-height:200px"></section>
+  </main>
+
+  <!-- Third-party consent banner: not the product's design system. -->
+  <div id="onetrust-consent-sdk"><p>We use cookies.</p><button>Accept all</button><button>Settings</button></div>
+
+  <script>
+    setTimeout(() => {
+      document.getElementById('late').innerHTML = '<h2>Pricing</h2><button class="btn">Choose plan</button> <button class="btn btn-ghost">Compare</button>';
+    }, 700);
+    new IntersectionObserver((entries, observer) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        document.getElementById('lazy').innerHTML = '<h2>Testimonials</h2><button class="btn">Read stories</button>';
+        observer.disconnect();
+      }
+    }).observe(document.getElementById('lazy'));
+  </script>
+</body>
+</html>

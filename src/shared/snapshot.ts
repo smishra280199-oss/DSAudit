@@ -222,6 +222,54 @@ export interface PageSnapshot {
   evidenceReport?: { planned: number; taken: number; error?: string };
   rendered: RenderedLayer;
   authored: AuthoredLayer;
+  /** Raw technology signals (absent on snapshots captured before detection existed). See inference/technology.ts. */
+  technology?: TechSignals;
+  /** How long capture waited for the page to finish rendering, and whether it did. */
+  settle?: CaptureSettle;
+}
+
+export interface CaptureSettle {
+  waitedMs: number;
+  /** Whether the page was scrolled through once to trigger lazy content. */
+  scrolled: boolean;
+  /** False when the DOM was still changing when the wait ran out. */
+  settled: boolean;
+  /** Structural mutations seen during the final quiet-period wait. */
+  mutations: number;
+}
+
+/**
+ * What the page reveals about how it was built, recorded as raw facts with
+ * no interpretation: capture stays generic and every detection rule lives in
+ * inference/technology.ts, where it can be tested against hand-made signals.
+ */
+export interface TechSignals {
+  /** <meta name="generator"> values. */
+  generators: string[];
+  /** Script URLs, as host + path without the query (at most 80). */
+  scripts: string[];
+  /** Stylesheet, preload and icon URLs, as host + path (at most 80). */
+  links: string[];
+  /** Hosts of images and media the page loads from (at most 30). */
+  assetHosts: string[];
+  /** Attributes on <html> and <body>, values trimmed. */
+  htmlAttrs: Record<string, string>;
+  bodyAttrs: Record<string, string>;
+  /** Attribute names seen anywhere, with generated suffixes folded (data-v-1a2b3c → data-v-*), with counts. */
+  attrNames: Record<string, number>;
+  /** Class-name prefixes (up to the first - or _), with counts; the most common 80. */
+  classPrefixes: Record<string, number>;
+  /** Ids of the first few levels of the page (app roots like #__next sit there). */
+  rootIds: string[];
+  /** Custom element tag names (they contain a hyphen), with counts. */
+  customTags: Record<string, number>;
+  /** Ids and types of inline <script> elements, e.g. "id:__NEXT_DATA__", "type:application/ld+json". */
+  inlineScripts: string[];
+  /** Globals and runtime markers read in the page's own JavaScript world (absent when that wasn't possible). */
+  runtime?: string[];
+  /** How many elements the census looked at, and whether it stopped early. */
+  scanned: number;
+  truncated: boolean;
 }
 
 /** One element as it really looked on screen. */

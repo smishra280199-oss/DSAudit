@@ -185,7 +185,8 @@ export function foundationDetail(audit: Audit, system: StarterSystem): Foundatio
   // ── Text styles: family, size, weight and line height together ──
   const styles = new Map<string, { family: string; size: number; weight: string; lineHeight: string; count: number; selectors: string[] }>();
   for (const v of views) {
-    if (!v.el.text) continue;
+    // Same scope as the typography foundation: not third-party widgets or hidden text.
+    if (!v.el.text || v.excluded) continue;
     const size = parseFloat(v.styles.fontSize ?? '');
     if (!Number.isFinite(size) || size <= 0) continue;
     const family = (v.styles.fontFamily ?? '').split(',')[0]!.replace(/["']/g, '').trim() || 'default';

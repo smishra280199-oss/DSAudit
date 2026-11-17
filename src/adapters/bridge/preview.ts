@@ -5,6 +5,7 @@
  */
 
 import { createCaptureApi, type CaptureApi } from '../../capture';
+import { probeRuntime } from '../../capture/runtime-probe';
 import { MemoryStore } from '../../storage/kv';
 import type { Bridge, InspectListener, TabInfo } from './types';
 
@@ -52,7 +53,12 @@ export class PreviewBridge implements Bridge {
   }
 
   async capture() {
-    return { page: this.captureApi().capture([]), hostAccess: true };
+    const api = this.captureApi();
+    const settled = await api.settle({ scroll: false });
+    const page = api.capture([], settled);
+    const win = this.frame.contentWindow;
+    if (page.technology && win) page.technology.runtime = probeRuntime(win);
+    return { page, hostAccess: true };
   }
 
   /** An iframe can't be screenshotted from script; reports simply omit the cover image. */

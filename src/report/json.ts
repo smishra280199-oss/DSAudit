@@ -9,6 +9,8 @@ export function auditToJson(audit: Audit): string {
       snapshot: audit.snapshot,
       score: audit.score,
       opportunities: audit.analysis.opportunities,
+      technology: audit.analysis.technology,
+      structure: audit.analysis.structure,
       savings: { assumptions: audit.assumptions, estimate: audit.savings },
     },
     null,

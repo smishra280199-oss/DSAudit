@@ -2,6 +2,7 @@
 export { Avatar, Badge, Swatch, type Tone } from './Badge';
 export { Button, IconButton } from './Button';
 export { Card, SectionLabel } from './Card';
+export { Checkbox } from './Checkbox';
 export { cx } from './cx';
 export { Dialog, DialogSection } from './Dialog';
 export { EmptyState } from './EmptyState';
