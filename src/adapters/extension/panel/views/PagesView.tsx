@@ -3,14 +3,17 @@
  * each page, then audit them together. Saved audits are listed underneath.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { pageName } from '../../../../insights/describe';
 import { hostOf, relativeTime } from '../../../../report/format';
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
   Avatar,
   Badge,
   Button,
   Card,
+  Checkbox,
   CompareIcon,
   DownloadIcon,
   List,
@@ -24,13 +27,29 @@ import {
 import { useNavigation } from '../navigation';
 import { useAuditState, useController } from '../use-audit';
 import { useReports } from '../use-reports';
+import { liveSelection, selectAllState, toggleAll, toggleOne } from '../selection';
 
 function CollectionCard() {
   const controller = useController();
   const { collection, tab, capturability, status } = useAuditState();
   const { go } = useNavigation();
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const busy = status === 'capturing';
   const alreadyAdded = collection.some((m) => m.url === tab?.url);
+
+  // Pages can leave the list elsewhere (deleted from Saved audits, a site capture): only live ids count.
+  const ids = useMemo(() => collection.map((m) => m.id), [collection]);
+  const chosen = liveSelection(selected, ids);
+  const allState = selectAllState(selected, ids);
+
+  const removeChosen = () => {
+    void controller.removeManyFromCollection(chosen);
+    setSelected(new Set());
+  };
+  const removeAll = () => {
+    void controller.clearCollection();
+    setSelected(new Set());
+  };
 
   return (
     <Card
@@ -40,25 +59,74 @@ function CollectionCard() {
       {collection.length === 0 ? (
         <p className="muted">No pages yet. Start with the page that is open now.</p>
       ) : (
-        <List label="Pages in this audit">
-          {collection.map((meta) => (
-            <Row
-              key={meta.id}
-              selected={meta.url === tab?.url}
-              leading={<Avatar src={meta.favIconUrl} label={meta.title || hostOf(meta.url)} />}
-              title={pageName(meta)}
-              meta={`${meta.title || hostOf(meta.url)} · ${meta.elementCount.toLocaleString()} elements`}
-              actions={
-                <Menu
-                  label={`Actions for ${pageName(meta)}`}
-                  sections={[
-                    { items: [{ label: 'Remove from audit', icon: <TrashIcon />, danger: true, onSelect: () => void controller.removeFromCollection(meta.id) }] },
-                  ]}
-                />
-              }
+        <>
+          <div className="collection-toolbar" role="toolbar" aria-label="Select pages">
+            <Checkbox
+              label={allState === 'all' ? 'Deselect all pages' : 'Select all pages'}
+              hideLabel
+              checked={allState === 'all'}
+              indeterminate={allState === 'some'}
+              onChange={() => setSelected(toggleAll(selected, ids))}
             />
-          ))}
-        </List>
+            <span className="collection-toolbar__count" aria-live="polite">
+              {chosen.length > 0
+                ? `${chosen.length} of ${collection.length} selected`
+                : `${collection.length} ${collection.length === 1 ? 'page' : 'pages'}`}
+            </span>
+            {chosen.length > 0 ? (
+              <>
+                <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+                  Cancel
+                </Button>
+                <Button size="sm" variant="danger" icon={<TrashIcon size={14} />} disabled={busy} onClick={removeChosen}>
+                  Remove {chosen.length === collection.length ? 'all' : chosen.length}
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" variant="ghost" disabled={busy} onClick={removeAll}>
+                Remove all
+              </Button>
+            )}
+          </div>
+          <List label="Pages in this audit">
+            {collection.map((meta, i) => (
+              <Row
+                key={meta.id}
+                selected={meta.url === tab?.url}
+                leading={
+                  <span className="ui-row__select">
+                    <Checkbox
+                      label={`Select ${pageName(meta)}`}
+                      hideLabel
+                      checked={selected.has(meta.id)}
+                      onChange={(on) => setSelected(toggleOne(selected, meta.id, on))}
+                    />
+                    <Avatar src={meta.favIconUrl} label={meta.title || hostOf(meta.url)} />
+                  </span>
+                }
+                title={pageName(meta)}
+                meta={`${meta.title || hostOf(meta.url)} · ${meta.elementCount.toLocaleString()} elements`}
+                actions={
+                  <Menu
+                    label={`Actions for ${pageName(meta)}`}
+                    sections={[
+                      {
+                        label: 'Order',
+                        items: [
+                          ...(i > 0 ? [{ label: 'Move up', icon: <ArrowUpIcon />, onSelect: () => void controller.moveInCollection(meta.id, -1) }] : []),
+                          ...(i < collection.length - 1
+                            ? [{ label: 'Move down', icon: <ArrowDownIcon />, onSelect: () => void controller.moveInCollection(meta.id, 1) }]
+                            : []),
+                        ],
+                      },
+                      { items: [{ label: 'Remove from audit', icon: <TrashIcon />, danger: true, onSelect: () => void controller.removeFromCollection(meta.id) }] },
+                    ].filter((section) => section.items.length > 0)}
+                  />
+                }
+              />
+            ))}
+          </List>
+        </>
       )}
       <div className="overview-actions">
         <Button
@@ -72,11 +140,6 @@ function CollectionCard() {
         {collection.length >= 2 && (
           <Button variant="primary" disabled={busy} onClick={() => void controller.auditCollection().then(() => go('overview'))}>
             Audit {collection.length} pages
-          </Button>
-        )}
-        {collection.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => void controller.clearCollection()}>
-            Clear
           </Button>
         )}
       </div>

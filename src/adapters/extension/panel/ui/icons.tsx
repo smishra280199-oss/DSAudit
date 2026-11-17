@@ -246,3 +246,15 @@ export const PlusIcon = (p: IconProps) => (
     <path d="M8 3v10M3 8h10" />
   </Icon>
 );
+
+export const ArrowUpIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M8 13V3M4 7l4-4 4 4" />
+  </Icon>
+);
+
+export const ArrowDownIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M8 3v10M4 9l4 4 4-4" />
+  </Icon>
+);

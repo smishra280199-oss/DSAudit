@@ -321,11 +321,33 @@ export class AuditController {
   }
 
   async removeFromCollection(id: string): Promise<void> {
-    await this.saveCollection(this.state.collection.filter((m) => m.id !== id));
+    await this.removeManyFromCollection([id]);
+  }
+
+  /** Removes several pages in one write; the captured snapshots stay in Saved audits. */
+  async removeManyFromCollection(ids: readonly string[]): Promise<void> {
+    const drop = new Set(ids);
+    const next = this.state.collection.filter((m) => !drop.has(m.id));
+    const removed = this.state.collection.length - next.length;
+    if (removed === 0) return;
+    await this.saveCollection(next);
+    if (removed > 1) this.notify(`${removed} pages removed. They stay in Saved audits.`);
   }
 
   async clearCollection(): Promise<void> {
+    const removed = this.state.collection.length;
     await this.saveCollection([]);
+    if (removed > 1) this.notify(`All ${removed} pages removed. They stay in Saved audits.`);
+  }
+
+  /** Moves a page up (-1) or down (+1); the order is the order pages appear in the report. */
+  async moveInCollection(id: string, offset: -1 | 1): Promise<void> {
+    const from = this.state.collection.findIndex((m) => m.id === id);
+    const to = from + offset;
+    if (from < 0 || to < 0 || to >= this.state.collection.length) return;
+    const next = [...this.state.collection];
+    [next[from], next[to]] = [next[to]!, next[from]!];
+    await this.saveCollection(next);
   }
 
   /** Audits every collected page together and opens the combined result. */
