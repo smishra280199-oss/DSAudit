@@ -5,6 +5,7 @@
  */
 
 import { INHERITED_KEYS, type PageSnapshot, type RenderedElement, type StyleKey } from '../shared/snapshot';
+import { annotateStructure, type ElementRole, type Exclusion, type MergeReason } from './structure';
 
 export interface ElementView {
   el: RenderedElement;
@@ -14,6 +15,22 @@ export interface ElementView {
   subtreeHasText: boolean;
   /** Whether the element or a descendant carries an accessible-name attribute. */
   subtreeHasLabel: boolean;
+  /** Whether a descendant is a heading or an image: a link around those is a card, not a text link. */
+  subtreeHasBlock: boolean;
+  /** The structure pass (structure.ts) fills in the rest. */
+  role: ElementRole;
+  /** Not part of the product's own rendered interface: left out of foundations and components. */
+  excluded: Exclusion | null;
+  /** A repeat of something already counted: left out of components. */
+  merged: MergeReason | null;
+  /** Index of the nearest ancestor that is a control, or -1. */
+  control: number;
+  /** For a control: the inner element that paints it (same box, own surface), or -1. Its look is the control's look. */
+  skin: number;
+  /** Inside something aria-hidden (inherited). */
+  ariaHidden: boolean;
+  /** Inside something disabled or aria-hidden (inherited): exempt from accessibility checks. */
+  exempt: boolean;
 }
 
 /** Screen-reader-only text (the 1×1 px clip pattern): present in the DOM, invisible on screen. */
@@ -23,6 +40,7 @@ export function isVisuallyHidden({ el }: ElementView): boolean {
 }
 
 const LABEL_ATTRS = ['aria-label', 'aria-labelledby', 'title', 'alt'];
+const BLOCK_CONTENT = /^(h[1-6]|img|picture|video|p|ul|ol|figure)$/;
 
 export function viewElements(snapshot: PageSnapshot): ElementView[] {
   const views: ElementView[] = [];
@@ -42,6 +60,14 @@ export function viewElements(snapshot: PageSnapshot): ElementView[] {
       styles,
       subtreeHasText: el.text.length > 0,
       subtreeHasLabel: LABEL_ATTRS.some((a) => (el.attrs[a] ?? '').trim().length > 0),
+      subtreeHasBlock: false,
+      role: 'structural',
+      excluded: null,
+      merged: null,
+      control: -1,
+      skin: -1,
+      ariaHidden: false,
+      exempt: false,
     });
   }
 
@@ -52,7 +78,9 @@ export function viewElements(snapshot: PageSnapshot): ElementView[] {
     if (!parent) continue;
     parent.subtreeHasText ||= view.subtreeHasText;
     parent.subtreeHasLabel ||= view.subtreeHasLabel;
+    parent.subtreeHasBlock ||= view.subtreeHasBlock || BLOCK_CONTENT.test(view.el.tag);
   }
+  annotateStructure(views, isVisuallyHidden);
   return views;
 }
 

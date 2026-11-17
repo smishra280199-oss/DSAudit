@@ -9,6 +9,7 @@
  * Both are built from buildBusinessCase(), so every figure matches the panel.
  */
 
+import { technologySummary } from '../inference/technology';
 import type { Audit } from '../audit';
 import { assumptionsLine, buildBusinessCase, consistencyLevel, type BusinessCase, type RankedOpportunity } from '../business';
 import { summarise } from '../insights';
@@ -140,6 +141,7 @@ export function detailedMarkdown(audit: Audit, options: ClientReportOptions): st
     '| --- | --- | --- |',
     ...accessibilityReport(audit).checks.map((c) => `| ${c.name} | ${c.sc} (${c.level}) | ${c.status === 'fail' ? `Fails: ${c.failed} of ${c.checked}` : c.status === 'pass' ? `Passes (${c.checked} checked)` : 'Nothing to check'} |`),
     '',
+    ...(analysis.technology.available ? ['## Website technology', '', '```', technologySummary(analysis.technology), '```', ''] : []),
     '# Opportunities, ordered by impact',
     '',
     ...b.ranked.flatMap((r) => [opportunityTask(r, audit), '']),

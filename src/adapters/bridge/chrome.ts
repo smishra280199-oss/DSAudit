@@ -6,9 +6,11 @@
 
 import type { CaptureApi, PageLink } from '../../capture';
 import { collectEvidence } from './evidence';
+import { probeRuntime } from '../../capture/runtime-probe';
 import type { FetchedSheet } from '../../capture/stylesheets';
 import { RUNTIME_MESSAGES, type RuntimeMessage } from '../../shared/messages';
 import type { KeyValueStore } from '../../storage/kv';
+import type { CaptureSettle } from '../../shared/snapshot';
 import { MAX_FETCHED_SHEETS, MAX_SHEET_CHARS, type Bridge, type InspectListener, type TabInfo } from './types';
 
 const ALL_URLS = { origins: ['<all_urls>'] };
@@ -83,16 +85,34 @@ export class ChromeBridge implements Bridge {
 
   async capture(tab: TabInfo) {
     const hostAccess = await this.hasHostAccess();
+    // Let late and lazy content render first (capped at a few seconds); see capture/settle.ts.
+    const settled = await this.run(tab, () => (window as unknown as CaptureGlobal).__dslintCapture.settle(), []).catch(() => undefined);
     const unreadable = await this.run(tab, () => (window as unknown as CaptureGlobal).__dslintCapture.listUnreadableSheets(), []);
     const fetched = hostAccess
       ? (await Promise.all(unreadable.slice(0, MAX_FETCHED_SHEETS).map(fetchSheet))).filter((s): s is FetchedSheet => s !== null)
       : [];
     const page = await this.run(
       tab,
-      (sheets: FetchedSheet[]) => (window as unknown as CaptureGlobal).__dslintCapture.capture(sheets),
-      [fetched],
+      (sheets: FetchedSheet[], s: CaptureSettle | null) => (window as unknown as CaptureGlobal).__dslintCapture.capture(sheets, s ?? undefined),
+      [fetched, settled ?? null],
     );
+    const runtime = await this.probeRuntime(tab);
+    if (page.technology && runtime) page.technology.runtime = runtime;
     return { page, hostAccess };
+  }
+
+  /**
+   * Framework globals and DOM expandos live in the page's own JavaScript
+   * world, which the isolated capture script can't see. Read-only; null when
+   * the page refuses it (e.g. a strict CSP on some browser versions).
+   */
+  private async probeRuntime(tab: TabInfo): Promise<string[] | null> {
+    try {
+      const [result] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, world: 'MAIN', func: probeRuntime });
+      return Array.isArray(result?.result) ? (result.result as string[]) : null;
+    } catch {
+      return null;
+    }
   }
 
   captureScreenshot(tab: TabInfo): Promise<string | null> {

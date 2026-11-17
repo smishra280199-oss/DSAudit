@@ -15,21 +15,25 @@ import { analyseShape } from './foundations/shape';
 import { analyseSpacing } from './foundations/spacing';
 import { analyseTypography } from './foundations/typography';
 import { findOpportunities } from './opportunities';
+import { summariseStructure } from './structure';
+import { detectTechnology } from './technology';
 import { analyseTokens } from './tokens';
 import type { AuditAnalysis, InteractionAnalysis } from './types';
 
 export function analyse(snapshot: PageSnapshot): AuditAnalysis {
   const views = viewElements(snapshot);
+  // Foundations measure the product's own interface: not cookie banners, screen-reader text or closed drawers.
+  const interfaceViews = views.filter((v) => !v.excluded);
 
   const foundations = {
-    color: analyseColor(snapshot, views),
-    typography: analyseTypography(snapshot, views),
-    spacing: analyseSpacing(snapshot, views),
-    shape: analyseShape(snapshot, views),
-    elevation: analyseElevation(snapshot, views),
-    motion: analyseMotion(snapshot, views),
+    color: analyseColor(snapshot, interfaceViews),
+    typography: analyseTypography(snapshot, interfaceViews),
+    spacing: analyseSpacing(snapshot, interfaceViews),
+    shape: analyseShape(snapshot, interfaceViews),
+    elevation: analyseElevation(snapshot, interfaceViews),
+    motion: analyseMotion(snapshot, interfaceViews),
   };
-  const components = analyseComponents(views);
+  const components = analyseComponents(views, snapshot.viewport.width);
   const tokens = analyseTokens(snapshot);
   const { interaction: coverage } = snapshot.authored;
   const interaction: InteractionAnalysis = {
@@ -54,6 +58,8 @@ export function analyse(snapshot: PageSnapshot): AuditAnalysis {
     naming,
     confidence: assessConfidence(snapshot),
     opportunities: findOpportunities({ foundations, components, tokens, interaction, accessibility, naming }),
+    structure: summariseStructure(views),
+    technology: detectTechnology(snapshot),
   };
 }
 

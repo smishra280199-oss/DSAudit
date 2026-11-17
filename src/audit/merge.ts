@@ -10,7 +10,7 @@
 
 import { summariseClassNames } from '../shared/class-naming';
 import { scopeSelector } from '../shared/page-scope';
-import { SNAPSHOT_SCHEMA_VERSION, type AuthoredDeclaration, type PageSnapshot, type RenderedElement } from '../shared/snapshot';
+import { SNAPSHOT_SCHEMA_VERSION, type AuthoredDeclaration, type PageSnapshot, type RenderedElement, type TechSignals } from '../shared/snapshot';
 
 function uniqueBy<T>(items: T[], key: (item: T) => string, prefer?: (a: T, b: T) => T): T[] {
   const map = new Map<string, T>();
@@ -20,6 +20,36 @@ function uniqueBy<T>(items: T[], key: (item: T) => string, prefer?: (a: T, b: T)
     map.set(k, existing && prefer ? prefer(existing, item) : (existing ?? item));
   }
   return [...map.values()];
+}
+
+function sumCounts(maps: Record<string, number>[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const m of maps) for (const [k, v] of Object.entries(m)) out[k] = (out[k] ?? 0) + v;
+  return out;
+}
+
+/** Technology signals of every page together: a site may load its framework only on some pages. */
+function mergeTechnology(snapshots: PageSnapshot[]): TechSignals | undefined {
+  const all = snapshots.map((s) => s.technology).filter((t): t is TechSignals => t !== undefined);
+  if (all.length === 0) return undefined;
+  const union = (pick: (t: TechSignals) => string[]) => [...new Set(all.flatMap(pick))];
+  const withRuntime = all.filter((t) => t.runtime);
+  return {
+    generators: union((t) => t.generators),
+    scripts: union((t) => t.scripts),
+    links: union((t) => t.links),
+    assetHosts: union((t) => t.assetHosts),
+    htmlAttrs: Object.assign({}, ...all.map((t) => t.htmlAttrs).reverse()),
+    bodyAttrs: Object.assign({}, ...all.map((t) => t.bodyAttrs).reverse()),
+    attrNames: sumCounts(all.map((t) => t.attrNames)),
+    classPrefixes: sumCounts(all.map((t) => t.classPrefixes)),
+    rootIds: union((t) => t.rootIds),
+    customTags: sumCounts(all.map((t) => t.customTags)),
+    inlineScripts: union((t) => t.inlineScripts),
+    ...(withRuntime.length ? { runtime: union((t) => t.runtime ?? []) } : {}),
+    scanned: all.reduce((n, t) => n + t.scanned, 0),
+    truncated: all.some((t) => t.truncated),
+  };
 }
 
 export function mergeSnapshots(snapshots: PageSnapshot[], id: string, title: string): PageSnapshot {
@@ -81,6 +111,15 @@ export function mergeSnapshots(snapshots: PageSnapshot[], id: string, title: str
     evidence: Object.fromEntries(
       snapshots.flatMap((s, page) => Object.entries(s.evidence ?? {}).map(([selector, shot]) => [scopeSelector(page, selector), shot])),
     ),
+    technology: mergeTechnology(snapshots),
+    settle: snapshots.some((s) => s.settle)
+      ? {
+          waitedMs: snapshots.reduce((n, s) => n + (s.settle?.waitedMs ?? 0), 0),
+          scrolled: snapshots.some((s) => s.settle?.scrolled),
+          settled: snapshots.every((s) => s.settle?.settled ?? true),
+          mutations: snapshots.reduce((n, s) => n + (s.settle?.mutations ?? 0), 0),
+        }
+      : undefined,
     rendered: {
       elements,
       truncated: snapshots.some((s) => s.rendered.truncated),

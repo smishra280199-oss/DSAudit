@@ -15,12 +15,15 @@ import { resolveSelector } from './selector';
 import { collectSheets, listUnreadableSheets, type FetchedSheet } from './stylesheets';
 import { discoverPages, type PageLink } from './discover';
 import { ShotSession, type Frame } from './shots';
+import { settle, type SettleOptions } from './settle';
+import { collectTechSignals } from './tech-signals';
+import type { CaptureSettle } from '../shared/snapshot';
 
 export type { Frame, ShotTarget } from './shots';
 export type { PageLink } from './discover';
 
 /** Bumped when the API changes so a stale injected copy gets replaced. */
-export const CAPTURE_API_VERSION = 2;
+export const CAPTURE_API_VERSION = 3;
 
 /** The snapshot fields capture can know; the panel adds id, favicon and host access. */
 export type CapturedPage = Omit<PageSnapshot, 'id' | 'favIconUrl' | 'hostAccess'>;
@@ -28,7 +31,10 @@ export type CapturedPage = Omit<PageSnapshot, 'id' | 'favIconUrl' | 'hostAccess'
 export interface CaptureApi {
   version: number;
   listUnreadableSheets(): string[];
-  capture(fetchedSheets: FetchedSheet[]): CapturedPage;
+  /** Waits for late, lazy and client-rendered content; call before capture(). See settle.ts. */
+  settle(options?: SettleOptions): Promise<CaptureSettle>;
+  /** Reads the page. `settled` is what settle() returned, recorded on the snapshot. */
+  capture(fetchedSheets: FetchedSheet[], settled?: CaptureSettle): CapturedPage;
   /** Outlines every element matching the selectors; returns how many were found. */
   highlight(selectors: string[], label?: string): number;
   clearHighlights(): void;
@@ -68,7 +74,9 @@ export function createCaptureApi(doc: Document, callbacks: CaptureCallbacks): Ca
 
     listUnreadableSheets: () => listUnreadableSheets(doc),
 
-    capture(fetchedSheets) {
+    settle: (options) => settle(doc, options),
+
+    capture(fetchedSheets, settled) {
       lastFetched = fetchedSheets;
       overlay.clear();
       const { layer: rendered, liveElements, shadowRoots } = walkRendered(doc);
@@ -82,6 +90,8 @@ export function createCaptureApi(doc: Document, callbacks: CaptureCallbacks): Ca
         colorScheme: win.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
         rendered,
         authored,
+        technology: collectTechSignals(doc),
+        ...(settled ? { settle: settled } : {}),
       };
     },
 
